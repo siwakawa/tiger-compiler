@@ -72,8 +72,17 @@ fun transExp(venv, tenv) =
 		| trexp(NilExp _)= {exp=(), ty=TNil}
 		| trexp(IntExp(i, _)) = {exp=(), ty=TInt}
 		| trexp(StringExp(s, _)) = {exp=(), ty=TString}
-		| trexp(CallExp({func, args}, nl)) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+		| trexp(CallExp({func=f, args=a}, nl)) =
+            (case tabBusca(f, venv) of
+              SOME(Func({level=l, label=labl, formals=formals, result=r, extern=e})) =>
+				let val argsTypes = map (fn (arg_exp) => (#ty (trexp(arg_exp)))) a
+                    fun join(t1, t2, b) = b andalso (tiposIguales t1 t2)
+                    open ListPair
+                    val areArgsTypesEqual = (ListPair.foldlEq join true (argsTypes, formals))
+                in 
+                    if areArgsTypesEqual then {exp=(), ty=r} else error("Los tipos de los argumentos no coinciden con los definidos para la funcion " ^ f, nl)
+                end
+              | _ => error("Funcion no definida " ^ f, nl))
 		| trexp(OpExp({left, oper=EqOp, right}, nl)) =
 			let
 				val {exp=_, ty=tyl} = trexp left
@@ -138,9 +147,23 @@ fun transExp(venv, tenv) =
 				val {exp, ty=tipo} = hd(rev lexti)
 			in	{ exp=(), ty=tipo } end
 		| trexp(AssignExp({var=SimpleVar s, exp}, nl)) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val _ = case tabBusca(s, venv)
+                         of SOME(VIntro) => 
+                            error("Error: asignación a entero de sólo lectura "^s, nl)
+                          | _ => ()
+                val typ_exp = tipoReal((#ty (trexp exp)), tenv)
+                val typ_var = tipoReal((#ty (trvar (SimpleVar s, nl))), tenv)
+            in 
+                if tiposIguales typ_exp typ_var then { exp=(), ty=TUnit }
+                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+            end
 		| trexp(AssignExp({var, exp}, nl)) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val typ_exp = tipoReal((#ty (trexp exp)), tenv)
+                val typ_var = tipoReal((#ty (trvar (var, nl))), tenv)
+            in 
+                if tiposIguales typ_exp typ_var then { exp=(), ty=TUnit }
+                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+            end
 		| trexp(IfExp({test, then', else'=SOME else'}, nl)) =
 			let val {exp=testexp, ty=tytest} = trexp test
 			    val {exp=thenexp, ty=tythen} = trexp then'
@@ -179,9 +202,13 @@ fun transExp(venv, tenv) =
 		| trexp(ArrayExp({typ, size, init}, nl)) =
 			{exp=(), ty=TUnit} (*COMPLETAR*)
 		and trvar(SimpleVar s, nl) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            (case tabBusca(s, venv)
+              of SOME(Var({ty=typ})) =>
+                 {exp=(), ty=typ}
+               | SOME(VIntro) => {exp=(), ty=TInt}
+               | _ => (error("Variable no definida " ^ s, nl)))
 		| trvar(FieldVar(v, s), nl) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+    		{exp=(), ty=TUnit} (*COMPLETAR*)
 		| trvar(SubscriptVar(v, e), nl) =
 			{exp=(), ty=TUnit} (*COMPLETAR*)
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
