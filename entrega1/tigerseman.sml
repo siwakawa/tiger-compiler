@@ -189,7 +189,13 @@ fun transExp(venv, tenv) =
 				else error("El cuerpo de un while no puede devolver un valor", nl)
 			end
 		| trexp(ForExp({var, escape, lo, hi, body}, nl)) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val _ = if tiposIguales (#ty (trexp lo)) TInt andalso tiposIguales (#ty (trexp lo)) TInt
+                        then () else error("Cotas no enteras", nl)
+                val venv' = fromTab venv
+                val venv'' = tabInserta (var, VIntro, venv')
+                val {exp=_,ty=bt} = transExp(venv'', tenv) body
+			in if tiposIguales bt TUnit then {exp=(), ty=TUnit} else error("Cuerpo del for tiene tipo incorrecto", nl)
+            end
 		| trexp(LetExp({decs, body}, _)) =
 			let
 				val (venv', tenv', _) = List.foldl (fn (d, (v, t, _)) => trdec(v, t) d) (venv, tenv, []) decs
@@ -200,7 +206,15 @@ fun transExp(venv, tenv) =
 		| trexp(BreakExp nl) =
 			{exp=(), ty=TUnit} (*COMPLETAR*)
 		| trexp(ArrayExp({typ, size, init}, nl)) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val st = #ty (trexp size)
+                val it = #ty (trexp init)
+                val _ = if tiposIguales st TInt then () else error("Tamaño del arreglo no es entero", nl)
+                val (typ_id,n) = case (tabBusca(typ,tenv))
+                                 of (SOME(TArray(t,n))) => (t, n)
+                                    | _ => error("El tipo no es un tipo de arreglo", nl)
+                val _ = if tiposIguales it (tipoReal(!typ_id, tenv)) then () else error("Tipo del valor inicial del arreglo no coincide con tipo del arreglo", nl)
+            in {exp=(), ty=TArray(typ_id,n)}
+            end
 		and trvar(SimpleVar s, nl) =
             (case tabBusca(s, venv)
               of SOME(Var({ty=typ})) =>
@@ -208,9 +222,24 @@ fun transExp(venv, tenv) =
                | SOME(VIntro) => {exp=(), ty=TInt}
                | _ => (error("Variable no definida " ^ s, nl)))
 		| trvar(FieldVar(v, s), nl) =
-    		{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val {exp=e', ty=var_type} = trvar (v, nl)
+                val listFields = case var_type
+                                  of (TRecord(ts,_)) => ts
+                                     | _ => error("FieldVar apunta a una variable que no es un Record", nl)
+                val (t',i) = (case List.find (fn x => (#1 x) = s) listFields
+                               of SOME(x) => (#2 x, #3 x)
+                                  | NONE => error(s^" no es un miembro", nl))
+            in { exp=(), ty=(!t') }
+            end
 		| trvar(SubscriptVar(v, e), nl) =
-			{exp=(), ty=TUnit} (*COMPLETAR*)
+            let val elem_type = case (trvar (v, nl)) of
+                                 {exp=_, ty=TArray(t, _)} => t
+                                 | _ => error("La variable no es un arreglo", nl)
+                val _ = case (trexp e) of
+                         {exp=_, ty=TInt} => ()
+                         | _ => error("El subíndice no es un entero", nl)
+             in {exp=(), ty=(!elem_type)}
+             end
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
 			(venv, tenv, []) (*COMPLETAR*)
 		| trdec (venv,tenv) (VarDec ({name,escape,typ=SOME s,init},pos)) =
