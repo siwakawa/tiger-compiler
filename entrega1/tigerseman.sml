@@ -241,11 +241,36 @@ fun transExp(venv, tenv) =
              in {exp=(), ty=(!elem_type)}
              end
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
-			(venv, tenv, []) (*COMPLETAR*)
+            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+                val _ = case init_typ
+                         of TNil => error("If the initializing expression is nil, then the long form must be used", pos)
+                            | _ => ()
+                val venv' = tabInserta (name, Var({ty=init_typ}), venv)
+            in (venv', tenv, [])
+            end
 		| trdec (venv,tenv) (VarDec ({name,escape,typ=SOME s,init},pos)) =
-			(venv, tenv, []) (*COMPLETAR*)
+            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+                val real_s = case tabBusca(s, tenv)
+                              of SOME(x) => tipoReal(x, tenv)
+                                 | _ => error("Type of declared variable does not exist", pos)
+                val _ = if (tiposIguales real_s init_typ) then () else error("Initializing expression type does not match variable declarated type", pos)
+                val venv' = tabInserta (name, Var({ty=init_typ}), venv)
+            in (venv', tenv, [])
+            end
+		| trdec (venv,tenv) (FunctionDec([({name=s, params=fs, result=rt, body=e}, pos)])) =
+            let val real_ret_typ = case tabBusca(s,tenv) 
+                                    of SOME(x) => tipoReal(x, tenv)
+                                       | _ => error("Return type not defined", pos)
+			in (venv, tenv, []) (*COMPLETAR*)
+            end
 		| trdec (venv,tenv) (FunctionDec fs) =
 			(venv, tenv, []) (*COMPLETAR*)
+		| trdec (venv,tenv) (TypeDec [({name=s, ty=t}, pos)]) =
+(*            let val real_type = tipoReal(t,tenv) *)
+            let val real_type = TNil
+                val tenv' = tabInserta(s, real_type, tenv)
+			in (venv, tenv', []) (*COMPLETAR (top sort)*)
+            end
 		| trdec (venv,tenv) (TypeDec ts) =
 			(venv, tenv, []) (*COMPLETAR*)
 	in trexp end
