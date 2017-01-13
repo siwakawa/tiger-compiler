@@ -257,22 +257,36 @@ fun transExp(venv, tenv) =
                 val venv' = tabInserta (name, Var({ty=init_typ}), venv)
             in (venv', tenv, [])
             end
-		| trdec (venv,tenv) (FunctionDec([({name=s, params=fs, result=rt, body=e}, pos)])) =
-            let val real_ret_typ = case tabBusca(s,tenv) 
-                                    of SOME(x) => tipoReal(x, tenv)
-                                       | _ => error("Return type not defined", pos)
-			in (venv, tenv, []) (*COMPLETAR*)
+		| trdec (venv,tenv) (FunctionDec([({name=s, params=fs, result=rt, body=e}, pos)])) = (venv,tenv,[]) (*COMPLETAR*)
+		| trdec (venv,tenv) (FunctionDec(fs)) =
+             let fun checkTip(name,pos) = case tabBusca(name, tenv) of
+                                            SOME(t) => t 
+                                            |_ => error("Type not defined "^name, pos)
+                 fun transTy(NameTy(s), pos) = checkTip(s,pos)
+                     | transTy(ArrayTy(s), pos) = checkTip(s,pos)
+                     | transTy(RecordTy(fs), pos) = TNil (*TODO ver si hace falta agregar algo al tenv relacionado con los parametros Records*)
+                 fun get_params_tips(fields,pos) = map (fn({name=_,escape=_,typ=t}) => transTy(t, pos)) fields
+                 fun get_sig({name=s, params=ps, result=SOME(rt), body=_}, pos) = (s, get_params_tips(ps,pos), checkTip(rt,pos))
+                     | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), #ty(trexp e))
+                 fun get_func_entry(name, params, result) = (name, Func({level=(), label="label", formals=params, result=result, extern=false}))(*TODO ver label y extern*)
+                 val sigs = map get_sig fs
+                 val func_entries_with_name = map get_func_entry sigs
+                 val venv_with_funentries = foldr (fn((name,funentry),env) => tabInserta(name,funentry,env)) venv func_entries_with_name
+
+			 in (venv_with_funentries, tenv, []) (*COMPLETAR*)
+             end
+		| trdec (venv,tenv) (TypeDec []) = (venv, tenv, [])
+		| trdec (venv,tenv) (TypeDec ldecs) =
+            let open List
+                fun reps [] = (false, 0)
+                | reps (({name=s,...},pos)::t) = if List.exists (fn({name=x,...},p) => x=s) t then (true, pos) else reps t
+                val _ = if #1 (reps ldecs) then error("Repated type names",#2 (reps ldecs)) else ()
+                val pos_first_dec = #2 (hd ldecs)
+                val ldecs' = map #1 ldecs
+                val tenv' = (tigertopsort.fijaTipos ldecs' tenv)
+                            handle tigertopsort.Ciclo => error("Cycle in types declaration", pos_first_dec)
+			in (venv, tenv', [])
             end
-		| trdec (venv,tenv) (FunctionDec fs) =
-			(venv, tenv, []) (*COMPLETAR*)
-		| trdec (venv,tenv) (TypeDec [({name=s, ty=t}, pos)]) =
-(*            let val real_type = tipoReal(t,tenv) *)
-            let val real_type = TNil
-                val tenv' = tabInserta(s, real_type, tenv)
-			in (venv, tenv', []) (*COMPLETAR (top sort)*)
-            end
-		| trdec (venv,tenv) (TypeDec ts) =
-			(venv, tenv, []) (*COMPLETAR*)
 	in trexp end
 fun transProg ex =
 	let	val main =
