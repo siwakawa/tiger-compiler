@@ -257,23 +257,33 @@ fun transExp(venv, tenv) =
                 val venv' = tabInserta (name, Var({ty=init_typ}), venv)
             in (venv', tenv, [])
             end
-		| trdec (venv,tenv) (FunctionDec([({name=s, params=fs, result=rt, body=e}, pos)])) = (venv,tenv,[]) (*COMPLETAR*)
 		| trdec (venv,tenv) (FunctionDec(fs)) =
              let fun checkTip(name,pos) = case tabBusca(name, tenv) of
                                             SOME(t) => t 
                                             |_ => error("Type not defined "^name, pos)
                  fun transTy(NameTy(s), pos) = checkTip(s,pos)
-                     | transTy(ArrayTy(s), pos) = checkTip(s,pos)
-                     | transTy(RecordTy(fs), pos) = TNil (*TODO ver si hace falta agregar algo al tenv relacionado con los parametros Records*)
-                 fun get_params_tips(fields,pos) = map (fn({name=_,escape=_,typ=t}) => transTy(t, pos)) fields
+                     | transTy(_, pos) = TUnit
+                 fun get_params_tips(fields,pos) = map (fn({name=n,escape=_,typ=t}) => (transTy(t, pos))) fields
                  fun get_sig({name=s, params=ps, result=SOME(rt), body=_}, pos) = (s, get_params_tips(ps,pos), checkTip(rt,pos))
-                     | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), #ty(trexp e))
+                     | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), TUnit)
                  fun get_func_entry(name, params, result) = (name, Func({level=(), label="label", formals=params, result=result, extern=false}))(*TODO ver label y extern*)
                  val sigs = map get_sig fs
                  val func_entries_with_name = map get_func_entry sigs
                  val venv_with_funentries = foldr (fn((name,funentry),env) => tabInserta(name,funentry,env)) venv func_entries_with_name
-
-			 in (venv_with_funentries, tenv, []) (*COMPLETAR*)
+                 
+                 fun get_formal_params({name=_, params=ps, result=_, body=_}, pos) = map (fn({name=n,escape=_,typ=t}) => (n, transTy(t, pos))) ps 
+                 fun add_formal_params_to_env(fparams) = foldr (fn(param, env) => tabInserta(#1 param, Var({ty=(#2 param)}), env)) venv_with_funentries fparams
+                 fun check_function(singleFunctionDec) =
+                   let val form_params = get_formal_params(singleFunctionDec)
+                       val pos = #2 singleFunctionDec
+                       val venv_with_params = add_formal_params_to_env(form_params)
+                       val type_body = #ty (transExp(venv_with_params, tenv) (#body (#1 singleFunctionDec)))
+                       val type_ret = #3 (get_sig singleFunctionDec)
+                       val _ = if tiposIguales type_body type_ret then () else error("Function body does not match return type", pos)
+                    in ()
+                    end
+                  val _ = map check_function fs
+			 in (venv_with_funentries, tenv, [])
              end
 		| trdec (venv,tenv) (TypeDec []) = (venv, tenv, [])
 		| trdec (venv,tenv) (TypeDec ldecs) =
