@@ -212,8 +212,11 @@ struct
 		fun getstrFun(args) = 
 		let
 			val str = TextIO.inputLine TextIO.stdIn
+            val r_str = case str of
+             SOME(x) => x
+             | NONE => "error"
 		in
-			storeString str
+			storeString r_str
 		end
 
 		val tabLib: (tigertemp.label, int list -> int) Tabla =
@@ -313,7 +316,10 @@ struct
 				(* Encontrar la función*)
 				val ffrac = List.filter (fn (body, frame) => tigerframe.name(frame)=f) funfracs
 				val _ = if (List.length(ffrac)<>1) then raise Fail ("No se encuentra la función, o repetida: "^f^"\n") else ()
-				val [(body, frame)] = ffrac
+				val (body, frame) = case ffrac of
+                  [(bod, fr)] => (bod, fr)
+                  | _ => raise Fail "Error"
+                  (*TODO completar error fail*)
 				(* Mostrar qué se está haciendo, si showdebug *)
 				val _ = if showdebug then (print((tigerframe.name frame)^":\n");List.app (print o tigerit.tree) body; print("Argumentos: "); List.app (fn n => (print(Int.toString(n)); print("  "))) args; print("\n")) else ()
 
@@ -352,7 +358,9 @@ struct
 				val _ = map (fn (x,y) => 
 					case x of
 						TEMP t => storeTemp t y
-						| MEM m => storeMem (evalExp m) y) formalsValues
+						| MEM m => storeMem (evalExp m) y
+                        (*TODO completar error*)
+                        | _ => raise Fail "error") formalsValues
 				(* Ejecutar la lista de instrucciones *)
 				val _ = execute body
 				val rv = loadTemp tigerframe.rv

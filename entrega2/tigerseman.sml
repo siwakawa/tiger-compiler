@@ -75,8 +75,19 @@ fun transExp(venv, tenv) =
 		| trexp(NilExp _)= {exp=nilExp(), ty=TNil}
 		| trexp(IntExp(i, _)) = {exp=intExp i, ty=TInt}
 		| trexp(StringExp(s, _)) = {exp=stringExp(s), ty=TString}
-		| trexp(CallExp({func, args}, nl)) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+		| trexp(CallExp({func=f, args=a}, nl)) =
+            (case tabBusca(f, venv) of
+              SOME(Func({level=l, label=labl, formals=formals, result=r, extern=e})) =>
+				let val argsTypes = map (fn (arg_exp) => (#ty (trexp(arg_exp)))) a
+                    fun join(t1, t2, b) = b andalso (tiposIguales t1 t2)
+                    open ListPair
+                    val areArgsTypesEqual = (ListPair.foldlEq join true (argsTypes, formals))
+                    handle UnequalLengths => error("Number of formal arguments does not match number of actual arguments", nl)
+                in 
+                (* COMPLETAR exp *)
+                    if areArgsTypesEqual then {exp=nilExp(), ty=r} else error("Los tipos de los argumentos no coinciden con los definidos para la funcion " ^ f, nl)
+                end
+              | _ => error("Funcion no definida " ^ f, nl))
 		| trexp(OpExp({left, oper=EqOp, right}, nl)) =
 			let
 				val {exp=expl, ty=tyl} = trexp left
@@ -151,9 +162,25 @@ fun transExp(venv, tenv) =
 				val {exp, ty=tipo} = hd(rev lexti)
 			in	{ exp=seqExp (exprs), ty=tipo } end
 		| trexp(AssignExp({var=SimpleVar s, exp}, nl)) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+	            let val _ = case tabBusca(s, venv)
+                         of SOME(VIntro(_)) => 
+                            error("Error: asignación a entero de sólo lectura "^s, nl)
+                          | _ => ()
+                val typ_exp = tipoReal(#ty (trexp exp))
+                val typ_var = tipoReal(#ty (trvar (SimpleVar s, nl)))
+            in 
+                (* COMPLETAR exp *)
+                if tiposIguales typ_exp typ_var then { exp=nilExp(), ty=TUnit }
+                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+            end
 		| trexp(AssignExp({var, exp}, nl)) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+	            let val typ_exp = tipoReal(#ty (trexp exp))
+                val typ_var = tipoReal(#ty (trvar (var, nl)))
+            in 
+                (* COMPLETAR exp *)
+                if tiposIguales typ_exp typ_var then { exp=nilExp(), ty=TUnit }
+                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+            end
 		| trexp(IfExp({test, then', else'=SOME else'}, nl)) =
 			let val {exp=testexp, ty=tytest} = trexp test
 			    val {exp=thenexp, ty=tythen} = trexp then'
@@ -181,7 +208,16 @@ fun transExp(venv, tenv) =
 				else error("El cuerpo de un while no puede devolver un valor", nl)
 			end
 		| trexp(ForExp({var, escape, lo, hi, body}, nl)) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+            let val _ = if tiposIguales (#ty (trexp lo)) TInt andalso tiposIguales (#ty (trexp hi)) TInt
+                        then () else error("Cotas no enteras", nl)
+                val level = getActualLev()
+                val acc' = allocLocal (topLevel()) (!escape)
+                val venv' = fromTab venv
+                val venv'' = tabInserta (var, VIntro({access=acc', level=level}), venv')
+                val {exp=_,ty=bt} = transExp(venv'', tenv) body
+                (* COMPLETAR exp *)
+			in if tiposIguales bt TUnit then {exp=nilExp(), ty=TUnit} else error("Cuerpo del for tiene tipo incorrecto", nl)
+            end
 		| trexp(LetExp({decs, body}, _)) =
 			let
 				fun aux (d, (v, t, exps1)) =
@@ -198,26 +234,138 @@ fun transExp(venv, tenv) =
 		| trexp(BreakExp nl) =
 			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
 		| trexp(ArrayExp({typ, size, init}, nl)) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+            let val st = #ty (trexp size)
+                val it = #ty (trexp init)
+                val _ = if tiposIguales st TInt then () else error("Tamaño del arreglo no es entero", nl)
+                val (typ_id,n) = case (tabBusca(typ,tenv))
+                                 of (SOME(TArray(t,n))) => (t, n)
+                                    | _ => error("El tipo no es un tipo de arreglo", nl)
+                val _ = if tiposIguales it (tipoReal(typ_id)) then () else error("Tipo del valor inicial del arreglo no coincide con tipo del arreglo", nl)
+                (* COMPLETAR exp *)
+            in {exp=nilExp(), ty=TArray(typ_id,n)}
+            end
 		and trvar(SimpleVar s, nl) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+            (case tabBusca(s, venv)
+              of SOME(Var({ty=typ,...})) =>
+                (* COMPLETAR exp *)
+                 {exp=nilExp(), ty=typ}
+                (* COMPLETAR exp *)
+                (* ver si VIntro debe tomar cosas *)
+               | SOME(VIntro(_)) => {exp=nilExp(), ty=TInt}
+               | _ => (error("Variable no definida " ^ s, nl)))
 		| trvar(FieldVar(v, s), nl) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+            let val {exp=e', ty=var_type} = trvar (v, nl)
+                val listFields = case tipoReal(var_type)
+                                  of (TRecord(ts,_)) => ts
+                                     | _ => error("FieldVar apunta a una variable que no es un Record", nl)
+                val (t',i) = (case List.find (fn x => (#1 x) = s) listFields
+                               of SOME(x) => (#2 x, #3 x)
+                                  | NONE => error(s^" no es un miembro", nl))
+                (* COMPLETAR exp *)
+            in { exp=nilExp(), ty=(t') }
+            end
 		| trvar(SubscriptVar(v, e), nl) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+            let val elem_type = case (trvar (v, nl)) of
+                                 {exp=_, ty=TArray(t, _)} => t
+                                 | _ => error("La variable no es un arreglo", nl)
+                val _ = case (trexp e) of
+                         {exp=_, ty=TInt} => ()
+                         | _ => error("El subíndice no es un entero", nl)
+             in {exp=nilExp(), ty=elem_type}
+                (* COMPLETAR exp *)
+             end
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
-			(venv, tenv, []) (*COMPLETAR*)
+            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+                val _ = case init_typ
+                         of TNil => error("If the initializing expression is nil, then the long form must be used", pos)
+                            | _ => ()
+                val acc = allocLocal (topLevel()) (!escape)
+                val lvl = getActualLev()
+                val venv' = tabRInserta (name, Var({ty=init_typ, access=acc, level=lvl}), venv)
+            in (venv', tenv, [])
+            end
 		| trdec (venv,tenv) (VarDec ({name,escape,typ=SOME s,init},pos)) =
-			(venv, tenv, []) (*COMPLETAR*)
+            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+                val real_s = case tabBusca(s, tenv)
+                              of SOME(x) => tipoReal(x)
+                                 | _ => error("Type of declared variable does not exist", pos)
+                val _ = if (tiposIguales real_s init_typ) then () else error("Initializing expression type does not match variable declarated type", pos)
+                val acc = allocLocal (topLevel()) (!escape)
+                val lvl = getActualLev()
+                val venv' = tabRInserta (name, Var({ty=real_s, access=acc, level=lvl}), venv)
+            in (venv', tenv, [])
+            end
 		| trdec (venv,tenv) (FunctionDec fs) =
-			(venv, tenv, []) (*COMPLETAR*)
-		| trdec (venv,tenv) (TypeDec ts) =
-			(venv, tenv, []) (*COMPLETAR*)
+             let fun checkTip(name,pos) = case tabBusca(name, tenv) of
+                                            SOME(t) => t 
+                                            |_ => error("Type not defined "^name, pos)
+                 fun transTy(NameTy(s), pos) = checkTip(s,pos)
+                     | transTy(_, pos) = TUnit
+                 fun get_params_tips(fields,pos) = map (fn({name=n,escape=_,typ=t}) => (transTy(t, pos))) fields
+                 fun get_sig({name=s, params=ps, result=SOME(rt), body=_}, pos) = (s, get_params_tips(ps,pos), checkTip(rt,pos))
+                     | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), TUnit)
+                 fun get_func_entry(name, params, result) = 
+                   let val parent=topLevel()
+                       val new_level=newLevel({parent=parent, name=name, formals=[]})
+                   in (name, Func({level=new_level, label=tigertemp.newlabel(), formals=params, result=result, extern=false}))(*TODO ver label y extern*)
+                   end
+                 val sigs = map get_sig fs
+                 fun has_more_that_one_definition(f_name, signature_list) =  
+                    let val number_definitions = length (List.filter (fn(s) => (#1 s)=f_name) signature_list)
+                    in (number_definitions > 1)
+                    end
+
+                 val _ = if (List.exists (fn(s) => has_more_that_one_definition(#1 s, sigs)) sigs) then error("Two functions with the same name in a sequence of mutually recursive functions", #2 (hd fs)) else ()
+
+                 val func_entries_with_name = map get_func_entry sigs
+                 val venv_with_funentries = foldr (fn((name,funentry),env) => tabRInserta(name,funentry,env)) venv func_entries_with_name
+
+                 fun get_formal_params({name=n, params=ps, result=_, body=_}, pos) = 
+                  let val fun_ventry = tabBusca(n, venv_with_funentries)
+                      val lvl = case fun_ventry of
+                                 SOME(Func(x)) => (#level(x))
+                                 | _ => error("Internal error 1", 0)
+                   in map (fn({name=n,escape=e,typ=t}) => (n, transTy(t, pos), e, 3)) ps 
+                   end
+                 fun add_formal_params_to_env(fparams,lvl) = 
+                    foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocLocal (topLevel()) (!(#3 param))), level=lvl}), env))) venv_with_funentries fparams
+                 fun check_and_push_function(singleFunctionDec) =
+                   let val form_params = get_formal_params(singleFunctionDec)
+                       val pos = #2 singleFunctionDec
+                       val name = #name (#1 singleFunctionDec)
+                       val lvl_fun = case tabBusca(name, venv_with_funentries)
+                                      of SOME(Func({level=l,...})) => l
+                                         | _ => error("Internal error 1", pos)
+                       val _ = pushLevel lvl_fun
+                       val venv_with_params = add_formal_params_to_env(form_params,getActualLev())
+                       (*COMPLETAR falta poplevel*)
+                       val body = #body (#1 singleFunctionDec)
+                       val type_body = #ty (transExp(venv_with_params, tenv) body)
+                       val type_ret = #3 (get_sig singleFunctionDec)
+                       val _ = if tiposIguales type_body type_ret then () else error("Function body does not match return type", pos)
+                    in ()
+                    end
+                  val _ = map check_and_push_function fs
+
+			 in (venv_with_funentries, tenv, [])
+             end
+		| trdec (venv,tenv) (TypeDec ldecs) =
+            let open List
+                fun reps [] = (false, 0)
+                | reps (({name=s,...},pos)::t) = if List.exists (fn({name=x,...},p) => x=s) t then (true, pos) else reps t
+                val _ = if #1 (reps ldecs) then error("Repated type names",#2 (reps ldecs)) else ()
+                val pos_first_dec = #2 (hd ldecs)
+                val ldecs' = map #1 ldecs
+                val tenv' = (tigertopsort.fijaTipos ldecs' tenv)
+                            handle tigertopsort.Ciclo => error("Cycle in types declaration", pos_first_dec)
+                                   | noExiste => error("Type not declared", pos_first_dec)
+			in (venv, tenv', [])
+            end
 	in trexp end
 fun transProg ex =
 	let	val main =
 				LetExp({decs=[FunctionDec[({name="_tigermain", params=[],
-								result=NONE, body=ex}, 0)]],
+								result=(SOME "int"), body=ex}, 0)]],
 						body=UnitExp 0}, 0)
 		val _ = transExp(tab_vars, tab_tipos) main
 	in	print "bien!\n" end
