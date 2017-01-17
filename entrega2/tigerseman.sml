@@ -78,14 +78,19 @@ fun transExp(venv, tenv) =
 		| trexp(CallExp({func=f, args=a}, nl)) =
             (case tabBusca(f, venv) of
               SOME(Func({level=l, label=labl, formals=formals, result=r, extern=e})) =>
-				let val argsTypes = map (fn (arg_exp) => (#ty (trexp(arg_exp)))) a
+				let val args_processed = map (fn (arg_exp) => (trexp(arg_exp))) a
+				    val argsTypes = map (fn (arg_exp) => #ty (arg_exp)) args_processed
+				    val ci_argsExps = map (fn (arg_exp) => #exp (arg_exp)) args_processed
                     fun join(t1, t2, b) = b andalso (tiposIguales t1 t2)
                     open ListPair
                     val areArgsTypesEqual = (ListPair.foldlEq join true (argsTypes, formals))
                     handle UnequalLengths => error("Number of formal arguments does not match number of actual arguments", nl)
+                    val _ = if areArgsTypesEqual then () else error("Los tipos de los argumentos no coinciden con los definidos para la funcion " ^ f, nl)
+                    val is_procedure = (tiposIguales r TUnit)
+                    (*val _ = pushLevel l  esto va?*)
+                    val ci_e = callExp(labl, e, is_procedure, l, ci_argsExps) 
                 in 
-                (* COMPLETAR exp *)
-                    if areArgsTypesEqual then {exp=nilExp(), ty=r} else error("Los tipos de los argumentos no coinciden con los definidos para la funcion " ^ f, nl)
+                    {exp=ci_e, ty=r}
                 end
               | _ => error("Funcion no definida " ^ f, nl))
 		| trexp(OpExp({left, oper=EqOp, right}, nl)) =
@@ -162,24 +167,32 @@ fun transExp(venv, tenv) =
 				val {exp, ty=tipo} = hd(rev lexti)
 			in	{ exp=seqExp (exprs), ty=tipo } end
 		| trexp(AssignExp({var=SimpleVar s, exp}, nl)) =
-	            let val _ = case tabBusca(s, venv)
+	        let val _ = case tabBusca(s, venv)
                          of SOME(VIntro(_)) => 
                             error("Error: asignación a entero de sólo lectura "^s, nl)
                           | _ => ()
-                val typ_exp = tipoReal(#ty (trexp exp))
-                val typ_var = tipoReal(#ty (trvar (SimpleVar s, nl)))
+                val exp_translated = trexp exp
+                val typ_exp = tipoReal(#ty exp_translated) 
+                val var_translated = trvar(SimpleVar s, nl)
+                val typ_var = tipoReal(#ty var_translated)
+                val _ = if tiposIguales typ_exp typ_var then () else error("The types of the variable and the expression do not match", nl)
+                val right_exp = #exp exp_translated
+                val var_exp = #exp var_translated
+                val e = assignExp({var=var_exp, exp=right_exp})
             in 
-                (* COMPLETAR exp *)
-                if tiposIguales typ_exp typ_var then { exp=nilExp(), ty=TUnit }
-                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+                { exp=e, ty=TUnit }
             end
 		| trexp(AssignExp({var, exp}, nl)) =
-	            let val typ_exp = tipoReal(#ty (trexp exp))
-                val typ_var = tipoReal(#ty (trvar (var, nl)))
+            let val exp_translated = trexp exp
+                val typ_exp = tipoReal(#ty exp_translated) 
+                val var_translated = trvar(var, nl)
+                val typ_var = tipoReal(#ty var_translated)
+                val _ = if tiposIguales typ_exp typ_var then () else error("The types of the variable and the expression do not match", nl)
+                val right_exp = #exp exp_translated
+                val var_exp = #exp var_translated
+                val e = assignExp({var=var_exp, exp=right_exp})
             in 
-                (* COMPLETAR exp *)
-                if tiposIguales typ_exp typ_var then { exp=nilExp(), ty=TUnit }
-                else error("El tipo de la variable y el de la expresión no coinciden", nl)
+                { exp=e, ty=TUnit }
             end
 		| trexp(IfExp({test, then', else'=SOME else'}, nl)) =
 			let val {exp=testexp, ty=tytest} = trexp test
@@ -188,7 +201,7 @@ fun transExp(venv, tenv) =
 			in
 				if tipoReal tytest=TInt andalso tiposIguales tythen tyelse then
 				{exp=if tipoReal tythen=TUnit then ifThenElseExpUnit {test=testexp,then'=thenexp,else'=elseexp} else ifThenElseExp {test=testexp,then'=thenexp,else'=elseexp}, ty=tythen}
-				else error("Error de tipos en if" ,nl)
+				else error("Type error in if expression" ,nl)
 			end
 		| trexp(IfExp({test, then', else'=NONE}, nl)) =
 			let val {exp=exptest,ty=tytest} = trexp test
@@ -204,19 +217,25 @@ fun transExp(venv, tenv) =
 				val tbody = trexp body
 			in
 				if tipoReal (#ty ttest) = TInt andalso #ty tbody = TUnit then {exp=whileExp {test=(#exp ttest), body=(#exp tbody), lev=topLevel()}, ty=TUnit}
-				else if tipoReal (#ty ttest) <> TInt then error("Error de tipo en la condición", nl)
-				else error("El cuerpo de un while no puede devolver un valor", nl)
+				else if tipoReal (#ty ttest) <> TInt then error("Error in condition type", nl)
+				else error("While expression cannot return a value", nl)
 			end
 		| trexp(ForExp({var, escape, lo, hi, body}, nl)) =
-            let val _ = if tiposIguales (#ty (trexp lo)) TInt andalso tiposIguales (#ty (trexp hi)) TInt
-                        then () else error("Cotas no enteras", nl)
+            let val {exp=explo, ty=tylo} = trexp lo
+                val {exp=exphi, ty=tyhi} = trexp hi
+                val _ = if tiposIguales tylo TInt andalso tiposIguales tyhi TInt
+                        then () else error("For subscripts are not integers", nl)
                 val level = getActualLev()
                 val acc' = allocLocal (topLevel()) (!escape)
+                val _ = preWhileForExp()
                 val venv' = fromTab venv
                 val venv'' = tabInserta (var, VIntro({access=acc', level=level}), venv')
-                val {exp=_,ty=bt} = transExp(venv'', tenv) body
-                (* COMPLETAR exp *)
-			in if tiposIguales bt TUnit then {exp=nilExp(), ty=TUnit} else error("Cuerpo del for tiene tipo incorrecto", nl)
+                val {exp=eb',ty=tb'} = transExp(venv'', tenv) body
+                val _ = if tiposIguales tb' TUnit then () else error("For expression cannot return a value", nl)
+                val ev' = simpleVar(acc', 0)
+                val ef'= forExp({lo=explo, hi=exphi, var=ev', body=eb'})
+                val _ = postWhileForExp()
+			in {exp=eb', ty=tb'} 
             end
 		| trexp(LetExp({decs, body}, _)) =
 			let
@@ -232,47 +251,44 @@ fun transExp(venv, tenv) =
 				{exp=seqExp(expdecs@[expbody]), ty=tybody}
 			end
 		| trexp(BreakExp nl) =
-			{exp=nilExp(), ty=TUnit} (*COMPLETAR*)
+			{exp=breakExp(), ty=TUnit} (*COMPLETAR.. falta algo mas?*)
 		| trexp(ArrayExp({typ, size, init}, nl)) =
-            let val st = #ty (trexp size)
-                val it = #ty (trexp init)
-                val _ = if tiposIguales st TInt then () else error("Tamaño del arreglo no es entero", nl)
+            let val {exp=expsize, ty=tysize} = trexp size
+                val {exp=expinit, ty=tyinit} = trexp init
+                val _ = if tiposIguales tysize TInt then () else error("Array size is not an integer", nl)
                 val (typ_id,n) = case (tabBusca(typ,tenv))
                                  of (SOME(TArray(t,n))) => (t, n)
-                                    | _ => error("El tipo no es un tipo de arreglo", nl)
-                val _ = if tiposIguales it (tipoReal(typ_id)) then () else error("Tipo del valor inicial del arreglo no coincide con tipo del arreglo", nl)
-                (* COMPLETAR exp *)
-            in {exp=nilExp(), ty=TArray(typ_id,n)}
+                                    | _ => error("Type is not array", nl)
+                val _ = if tiposIguales tyinit (tipoReal(typ_id)) then () else error("Initializing value does not match array's type", nl)
+                val exparr = arrayExp({size=expsize, init=expinit})
+            in {exp=exparr, ty=TArray(typ_id,n)}
             end
 		and trvar(SimpleVar s, nl) =
             (case tabBusca(s, venv)
-              of SOME(Var({ty=typ,...})) =>
-                (* COMPLETAR exp *)
-                 {exp=nilExp(), ty=typ}
-                (* COMPLETAR exp *)
-                (* ver si VIntro debe tomar cosas *)
-               | SOME(VIntro(_)) => {exp=nilExp(), ty=TInt}
-               | _ => (error("Variable no definida " ^ s, nl)))
+              of SOME(Var({ty=typ,access=acc,level=lvl})) =>
+                 {exp=simpleVar(acc,lvl), ty=typ}
+               | SOME(VIntro({access=acc, level=lvl})) =>
+                 {exp=simpleVar(acc,lvl), ty=TInt}
+               | _ => (error("Undefined variable " ^ s, nl)))
 		| trvar(FieldVar(v, s), nl) =
             let val {exp=e', ty=var_type} = trvar (v, nl)
                 val listFields = case tipoReal(var_type)
                                   of (TRecord(ts,_)) => ts
-                                     | _ => error("FieldVar apunta a una variable que no es un Record", nl)
+                                     | _ => error("Variable is not a record", nl)
                 val (t',i) = (case List.find (fn x => (#1 x) = s) listFields
                                of SOME(x) => (#2 x, #3 x)
-                                  | NONE => error(s^" no es un miembro", nl))
-                (* COMPLETAR exp *)
-            in { exp=nilExp(), ty=(t') }
+                                  | NONE => error(s^" is not a record member", nl))
+            in 
+                {exp=fieldVar(e',i), ty=t'}
             end
 		| trvar(SubscriptVar(v, e), nl) =
-            let val elem_type = case (trvar (v, nl)) of
-                                 {exp=_, ty=TArray(t, _)} => t
-                                 | _ => error("La variable no es un arreglo", nl)
-                val _ = case (trexp e) of
-                         {exp=_, ty=TInt} => ()
-                         | _ => error("El subíndice no es un entero", nl)
-             in {exp=nilExp(), ty=elem_type}
-                (* COMPLETAR exp *)
+            let val (expvar, elemtype) = case (trvar (v, nl)) of
+                                              {exp=e, ty=TArray(elem_typ, _)} => (e, elem_typ)
+                                              | _ => error("Variable is not an array", nl)
+                val {exp=expsub, ty=tysub} = case (trexp e) of
+                                              {exp=expsub, ty=TInt} => {exp=expsub, ty=TInt}
+                                              | _ => error("Subscript is not an integer", nl)
+             in {exp=subscriptVar(expvar, expsub), ty=elemtype}
              end
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
             let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
