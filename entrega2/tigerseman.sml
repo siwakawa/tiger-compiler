@@ -54,7 +54,7 @@ fun tiposIguales (TRecord _) TNil = true
 		let
 			val a = case !r of
 				SOME t => t
-				| NONE => raise Fail "No debería pasar! (1)"
+				| NONE => raise Fail "Internal error 3 (should not happen)"
 		in
 			tiposIguales a b
 		end
@@ -62,14 +62,14 @@ fun tiposIguales (TRecord _) TNil = true
 		let
 			val b = case !r of
 				SOME t => t
-				| NONE => raise Fail "No debería pasar! (2)"
+				| NONE => raise Fail "Internal error 4 (should not happen)"
 		in
 			tiposIguales a b
 		end
   | tiposIguales a b = (a=b)
 
 fun transExp(venv, tenv) =
-	let fun error(s, p) = raise Fail ("Error -- línea "^Int.toString(p)^": "^s^"\n")
+	let fun error(s, p) = raise Fail ("Error -- line "^Int.toString(p)^": "^s^"\n")
 		fun trexp(VarExp v) = trvar(v)
 		| trexp(UnitExp _) = {exp=unitExp(), ty=TUnit}
 		| trexp(NilExp _)= {exp=nilExp(), ty=TNil}
@@ -85,14 +85,14 @@ fun transExp(venv, tenv) =
                     open ListPair
                     val areArgsTypesEqual = (ListPair.foldlEq join true (argsTypes, formals))
                     handle UnequalLengths => error("Number of formal arguments does not match number of actual arguments", nl)
-                    val _ = if areArgsTypesEqual then () else error("Los tipos de los argumentos no coinciden con los definidos para la funcion " ^ f, nl)
+                    val _ = if areArgsTypesEqual then () else error("Type of formal arguments do not match those of the actual arguments" ^ f, nl)
                     val is_procedure = (tiposIguales r TUnit)
                     (*val _ = pushLevel l  esto va?*)
                     val ci_e = callExp(labl, e, is_procedure, l, ci_argsExps) 
                 in 
                     {exp=ci_e, ty=r}
                 end
-              | _ => error("Funcion no definida " ^ f, nl))
+              | _ => error("Function not defined" ^ f, nl))
 		| trexp(OpExp({left, oper=EqOp, right}, nl)) =
 			let
 				val {exp=expl, ty=tyl} = trexp left
@@ -100,7 +100,7 @@ fun transExp(venv, tenv) =
 			in
 				if tiposIguales tyl tyr andalso not (tyl=TNil andalso tyr=TNil) andalso tyl<>TUnit then 
 					{exp=if tiposIguales tyl TString then binOpStrExp {left=expl,oper=EqOp,right=expr} else binOpIntRelExp {left=expl,oper=EqOp,right=expr}, ty=TInt}
-					else error("Tipos no comparables", nl)
+					else error("Non-comparable types", nl)
 			end
 		| trexp(OpExp({left, oper=NeqOp, right}, nl)) = 
 			let
@@ -109,7 +109,7 @@ fun transExp(venv, tenv) =
 			in
 				if tiposIguales tyl tyr andalso not (tyl=TNil andalso tyr=TNil) andalso tyl<>TUnit then 
 					{exp=if tiposIguales tyl TString then binOpStrExp {left=expl,oper=NeqOp,right=expr} else binOpIntRelExp {left=expl,oper=NeqOp,right=expr}, ty=TInt}
-					else error("Tipos no comparables", nl)
+					else error("Non-comparable types", nl)
 			end
 		| trexp(OpExp({left, oper, right}, nl)) = 
 			let
@@ -118,24 +118,24 @@ fun transExp(venv, tenv) =
 			in
 				if tiposIguales tyl tyr then
 					case oper of
-						PlusOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Error de tipos", nl)
-						| MinusOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Error de tipos", nl)
-						| TimesOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Error de tipos", nl)
-						| DivideOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Error de tipos", nl)
+						PlusOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Type error", nl)
+						| MinusOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Type error", nl)
+						| TimesOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Type error", nl)
+						| DivideOp => if tipoReal tyl=TInt then {exp=binOpIntExp {left=expl, oper=oper, right=expr},ty=TInt} else error("Type error", nl)
 						| LtOp => if tipoReal tyl=TInt orelse tipoReal tyl=TString then
 							{exp=if tipoReal tyl=TInt then binOpIntRelExp {left=expl,oper=oper,right=expr} else binOpStrExp {left=expl,oper=oper,right=expr},ty=TInt} 
-							else error("Error de tipos", nl)
+							else error("Type error", nl)
 						| LeOp => if tipoReal tyl=TInt orelse tipoReal tyl=TString then 
 							{exp=if tipoReal tyl=TInt then binOpIntRelExp {left=expl,oper=oper,right=expr} else binOpStrExp {left=expl,oper=oper,right=expr},ty=TInt} 
-							else error("Error de tipos", nl)
+							else error("Type error", nl)
 						| GtOp => if tipoReal tyl=TInt orelse tipoReal tyl=TString then
 							{exp=if tipoReal tyl=TInt then binOpIntRelExp {left=expl,oper=oper,right=expr} else binOpStrExp {left=expl,oper=oper,right=expr},ty=TInt} 
-							else error("Error de tipos", nl)
+							else error("Type error", nl)
 						| GeOp => if tipoReal tyl=TInt orelse tipoReal tyl=TString then
 							{exp=if tipoReal tyl=TInt then binOpIntRelExp {left=expl,oper=oper,right=expr} else binOpStrExp {left=expl,oper=oper,right=expr},ty=TInt} 
-							else error("Error de tipos", nl)
-						| _ => raise Fail "No debería pasar! (3)"
-				else error("Error de tipos", nl)
+							else error("Type error", nl)
+						| _ => raise Fail "Internal error 5 (should not happen)"
+				else error("Type error", nl)
 			end
 		| trexp(RecordExp({fields, typ}, nl)) =
 			let
@@ -146,17 +146,17 @@ fun transExp(venv, tenv) =
 				val (tyr, cs) = case tabBusca(typ, tenv) of
 					SOME t => (case tipoReal t of
 						TRecord (cs, u) => (TRecord (cs, u), cs)
-						| _ => error(typ^" no es de tipo record", nl))
-					| NONE => error("Tipo inexistente ("^typ^")", nl)
+						| _ => error(typ^" is not a Record type", nl))
+					| NONE => error("Type does not exist ("^typ^")", nl)
 				
 				(* Verificar que cada campo esté en orden y tenga una expresión del tipo que corresponde *)
 				fun verificar _ [] [] = []
-				  | verificar _ (c::cs) [] = error("Faltan campos", nl)
-				  | verificar _ [] (c::cs) = error("Sobran campos", nl)
+				  | verificar _ (c::cs) [] = error("Missing fields", nl)
+				  | verificar _ [] (c::cs) = error("Too many fields", nl)
 				  | verificar n ((s,t,_)::cs) ((sy,{exp,ty})::ds) =
-						if s<>sy then error("Error de campo", nl)
+						if s<>sy then error("Field error", nl)
 						else if tiposIguales ty t then (exp, n)::(verificar (n+1) cs ds)
-							 else error("Error de tipo del campo "^s, nl)
+							 else error("Error in field type "^s, nl)
 				val lf = verificar 0 cs tfields
 			in
 				{exp=recordExp lf, ty=tyr}
@@ -169,7 +169,7 @@ fun transExp(venv, tenv) =
 		| trexp(AssignExp({var=SimpleVar s, exp}, nl)) =
 	        let val _ = case tabBusca(s, venv)
                          of SOME(VIntro(_)) => 
-                            error("Error: asignación a entero de sólo lectura "^s, nl)
+                            error("Assignment to read-only int "^s, nl)
                           | _ => ()
                 val exp_translated = trexp exp
                 val typ_exp = tipoReal(#ty exp_translated) 
@@ -209,7 +209,7 @@ fun transExp(venv, tenv) =
 			in
 				if tipoReal tytest=TInt andalso tythen=TUnit then
 				{exp=ifThenExp{test=exptest, then'=expthen}, ty=TUnit}
-				else error("Error de tipos en if", nl)
+				else error("Type error inside if", nl)
 			end
 		| trexp(WhileExp({test, body}, nl)) =
 			let
@@ -323,7 +323,7 @@ fun transExp(venv, tenv) =
                  fun get_func_entry(name, params, result) = 
                    let val parent=topLevel()
                        val new_level=newLevel({parent=parent, name=name, formals=[]})
-                   in (name, Func({level=new_level, label=tigertemp.newlabel(), formals=params, result=result, extern=false}))(*TODO ver label y extern*)
+                   in (name, Func({level=new_level, label=tigertemp.newlabel(), formals=params, result=result, extern=false}))
                    end
                  val sigs = map get_sig fs
                  fun has_more_that_one_definition(f_name, signature_list) =  
@@ -340,22 +340,20 @@ fun transExp(venv, tenv) =
                   let val fun_ventry = tabBusca(n, venv_with_funentries)
                       val lvl = case fun_ventry of
                                  SOME(Func(x)) => (#level(x))
-                                 | _ => error("Internal error 1", 0)
+                                 | _ => error("Internal error 1 (should not happen)", pos)
                    in map (fn({name=n,escape=e,typ=t}) => (n, transTy(t, pos), e, 3)) ps 
                    end
                  fun add_formal_params_to_env(fparams,lvl) = 
                     foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocLocal (topLevel()) (!(#3 param))), level=lvl}), env))) venv_with_funentries fparams
                  fun check_and_push_function(singleFunctionDec) =
                    let val form_params = get_formal_params(singleFunctionDec)
-                       val pos = #2 singleFunctionDec
-                       val name = #name (#1 singleFunctionDec)
+                       val ({name=name, params=ps, result=r, body=body}, pos) = singleFunctionDec
                        val lvl_fun = case tabBusca(name, venv_with_funentries)
                                       of SOME(Func({level=l,...})) => l
-                                         | _ => error("Internal error 1", pos)
+                                         | _ => error("Internal error 2 (should not happen)", pos)
                        val _ = pushLevel lvl_fun
                        val venv_with_params = add_formal_params_to_env(form_params,getActualLev())
-                       (*COMPLETAR falta poplevel*)
-                       val body = #body (#1 singleFunctionDec)
+                       val _ = popLevel
                        val type_body = #ty (transExp(venv_with_params, tenv) body)
                        val type_ret = #3 (get_sig singleFunctionDec)
                        val _ = if tiposIguales type_body type_ret then () else error("Function body does not match return type", pos)
