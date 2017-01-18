@@ -138,8 +138,13 @@ fun nilExp() = Ex (CONST 0)
 
 fun intExp i = Ex (CONST i)
 
-fun simpleVar(acc, nivel) =
-	Ex (CONST 0) (*COMPLETAR*)
+fun simpleVar(acc, level) =
+    case acc of
+      InReg r => Ex (TEMP r)
+      | InFrame k => let fun aux 0 = TEMP fp
+                             | aux n = MEM(BINOP(PLUS, CONST(fpPrevLev), aux(n-1)))
+                     in Ex(MEM(BINOP(PLUS, aux(getActualLev() - level), CONST k))) 
+                     end
 
 fun varDec(acc) = simpleVar(acc, getActualLev())
 

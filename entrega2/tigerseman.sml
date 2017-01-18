@@ -322,6 +322,7 @@ fun transExp(venv, tenv) =
                      | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), TUnit)
                  fun get_func_entry(name, params, result) = 
                    let val parent=topLevel()
+                       (*TODO COMPLETAR ver formals*)
                        val new_level=newLevel({parent=parent, name=name, formals=[]})
                    in (name, Func({level=new_level, label=tigertemp.newlabel(), formals=params, result=result, extern=false}))
                    end
@@ -344,23 +345,28 @@ fun transExp(venv, tenv) =
                    in map (fn({name=n,escape=e,typ=t}) => (n, transTy(t, pos), e, 3)) ps 
                    end
                  fun add_formal_params_to_env(fparams,lvl) = 
-                    foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocLocal (topLevel()) (!(#3 param))), level=lvl}), env))) venv_with_funentries fparams
+                    foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocArg (topLevel()) (!(#3 param))), level=lvl}), env))) venv_with_funentries fparams
                  fun check_and_push_function(singleFunctionDec) =
                    let val form_params = get_formal_params(singleFunctionDec)
                        val ({name=name, params=ps, result=r, body=body}, pos) = singleFunctionDec
+                       val type_ret = case r of
+                                      SOME(t) => checkTip(t, pos)
+                                      | NONE => TUnit
+                       val is_proc = tiposIguales type_ret TUnit
                        val lvl_fun = case tabBusca(name, venv_with_funentries)
                                       of SOME(Func({level=l,...})) => l
                                          | _ => error("Internal error 2 (should not happen)", pos)
+                       val _ = preFunctionDec()
                        val _ = pushLevel lvl_fun
                        val venv_with_params = add_formal_params_to_env(form_params,getActualLev())
+                       val {exp=bodyexp, ty=bodytype} = transExp(venv_with_params, tenv) body
+                       val _ = functionDec(bodyexp, lvl_fun, is_proc)
                        val _ = popLevel
-                       val type_body = #ty (transExp(venv_with_params, tenv) body)
-                       val type_ret = #3 (get_sig singleFunctionDec)
-                       val _ = if tiposIguales type_body type_ret then () else error("Function body does not match return type", pos)
+                       val _ = postFunctionDec()
+                       val _ = if tiposIguales bodytype type_ret then () else error("Function body does not match return type", pos)
                     in ()
                     end
                   val _ = map check_and_push_function fs
-
 			 in (venv_with_funentries, tenv, [])
              end
 		| trdec (venv,tenv) (TypeDec ldecs) =
