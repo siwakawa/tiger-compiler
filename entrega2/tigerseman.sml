@@ -213,12 +213,18 @@ fun transExp(venv, tenv) =
 			end
 		| trexp(WhileExp({test, body}, nl)) =
 			let
+                val _ = preWhileForExp()
 				val ttest = trexp test
 				val tbody = trexp body
+                val _ = if tipoReal (#ty ttest) = TInt andalso #ty tbody = TUnit
+                        then () 
+                        else 
+                            if tipoReal (#ty ttest) <> TInt 
+                            then error("Error in condition type", nl) 
+                            else error("While expression cannot return a value", nl)
+               val _ = postWhileForExp()
 			in
-				if tipoReal (#ty ttest) = TInt andalso #ty tbody = TUnit then {exp=whileExp {test=(#exp ttest), body=(#exp tbody), lev=topLevel()}, ty=TUnit}
-				else if tipoReal (#ty ttest) <> TInt then error("Error in condition type", nl)
-				else error("While expression cannot return a value", nl)
+				{exp=whileExp {test=(#exp ttest), body=(#exp tbody), lev=topLevel()}, ty=TUnit}
 			end
 		| trexp(ForExp({var, escape, lo, hi, body}, nl)) =
             let val {exp=explo, ty=tylo} = trexp lo
@@ -266,7 +272,7 @@ fun transExp(venv, tenv) =
 		and trvar(SimpleVar s, nl) =
             (case tabBusca(s, venv)
               of SOME(Var({ty=typ,access=acc,level=lvl})) =>
-                 {exp=simpleVar(acc,lvl), ty=typ}
+                 {exp=simpleVar(acc,lvl), ty=tipoReal typ}
                | SOME(VIntro({access=acc, level=lvl})) =>
                  {exp=simpleVar(acc,lvl), ty=TInt}
                | _ => (error("Undefined variable " ^ s, nl)))
@@ -279,7 +285,7 @@ fun transExp(venv, tenv) =
                                of SOME(x) => (#2 x, #3 x)
                                   | NONE => error(s^" is not a record member", nl))
             in 
-                {exp=fieldVar(e',i), ty=t'}
+                {exp=fieldVar(e',i), ty=tipoReal t'}
             end
 		| trvar(SubscriptVar(v, e), nl) =
             let val (expvar, elemtype) = case (trvar (v, nl)) of

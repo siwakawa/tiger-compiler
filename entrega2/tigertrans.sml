@@ -232,7 +232,9 @@ fun letExp ([], body) = Ex (unEx body)
  |  letExp (inits, body) = Ex (ESEQ(seq inits,unEx body))
 
 fun breakExp() = 
-	Ex (CONST 0) (*COMPLETAR*)
+    let val l = topSalida()
+    in Nx (JUMP(NAME l, [l]))
+    end
 
 fun seqExp ([]:exp list) = Nx (EXP(CONST 0))
 	| seqExp (exps:exp list) =
