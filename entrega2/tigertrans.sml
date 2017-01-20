@@ -270,16 +270,71 @@ in
 end
 
 fun forExp {lo, hi, var, body} =
-	Ex (CONST 0) (*COMPLETAR*)
+    let val var' = unEx var
+        val (l1, l2, lsal) = (newlabel(), newlabel(), topSalida())
+    in Nx (seq (case hi of
+                    Ex (CONST h) => if h < valOf(Int.maxInt) then
+                    (* First case, hi is CONST and less than the maxInt*)
+                                      [MOVE (var', unEx lo),
+                                       JUMP (NAME l2, [l2]),
+                                       LABEL l1, unNx body,
+                                       MOVE (var', BINOP(PLUS, var', CONST 1)),
+                                       LABEL l2, CJUMP(GT, var', CONST h, lsal, l1),
+                                       LABEL lsal]
+                                       (* Else if it is >= maxInt *)
+                                    else 
+                                       [MOVE (var', unEx lo),
+                                        LABEL l2,
+                                        unNx body, 
+                                        CJUMP(EQ, var', CONST h, lsal, l1),
+                                        LABEL l1,
+                                        MOVE(var', BINOP(PLUS, var', CONST 1)),
+                                        JUMP(NAME l2, [l2]),
+                                        LABEL lsal]
+                      | _ => let val t = newtemp()
+                      (* Second case, hi not a CONST *)
+                             in [MOVE(var', unEx lo), MOVE(TEMP t, unEx hi), unNx body,
+                                 CJUMP(EQ, var', TEMP t, lsal, l1),
+                                 LABEL l1, MOVE(var', BINOP(PLUS, var', CONST 1)),
+                                 JUMP (NAME l2, [l2]), LABEL lsal]
+                             end))
+    end
+
 
 fun ifThenExp{test, then'} =
-	Ex (CONST 0) (*COMPLETAR*)
+    let val test' = unCx test
+        val (l1, l2) = (newlabel(), newlabel())
+    in Nx (seq ([test'(l1,l2),
+                 LABEL l1,
+                 unNx then',
+                 LABEL l2]))
+    end
 
 fun ifThenElseExp {test,then',else'} =
-	Ex (CONST 0) (*COMPLETAR*)
+    let val r = newtemp()
+        val test' = unCx test
+        val (l1, l2, lsalida) = (newlabel(), newlabel(), newlabel())
+    in Ex (ESEQ (seq ([test'(l1, l2),
+                       LABEL l1,
+                       MOVE (TEMP r, unEx then'),
+                       JUMP (NAME lsalida, [lsalida]),
+                       LABEL l2,
+                       MOVE (TEMP r, unEx else'),
+                       LABEL lsalida]),
+                       TEMP r))
+    end
 
 fun ifThenElseExpUnit {test,then',else'} =
-	Ex (CONST 0) (*COMPLETAR*)
+    let val test' = unCx test
+        val (l1, l2, lsalida) = (newlabel(), newlabel(), newlabel())
+    in Nx (seq ([test'(l1, l2),
+                       LABEL l1,
+                       unNx then',
+                       JUMP (NAME lsalida, [lsalida]),
+                       LABEL l2,
+                       unNx else',
+                       LABEL lsalida]))
+    end
 
 fun assignExp{var, exp} =
 let
@@ -290,13 +345,43 @@ in
 end
 
 fun binOpIntExp {left, oper, right} = 
-	Ex (CONST 0) (*COMPLETAR*)
+    let val l = unEx left
+        val r = unEx right
+        fun subst oper = fn(t, f) => CJUMP(oper, l, r, t, f)
+    in case oper of
+         PlusOp => Ex (BINOP (PLUS, l, r))
+         | MinusOp => Ex (BINOP (MINUS, l, r))
+         | TimesOp => Ex (BINOP (MUL, l, r))
+         | DivideOp => Ex (BINOP (DIV, l, r))
+         | _ => raise Fail "Intermediate code internal error 1"
+   end
 
 fun binOpIntRelExp {left,oper,right} =
-	Ex (CONST 0) (*COMPLETAR*)
+    let val l = unEx left
+        val r = unEx right
+        fun subst oper = fn(t, f) => CJUMP(oper, l, r, t, f)
+    in case oper of
+         EqOp => Cx (subst EQ)
+         | NeqOp => Cx (subst NE)
+         | LtOp => Cx (subst LT)
+         | LeOp => Cx (subst LE)
+         | GtOp => Cx (subst GT)
+         | GeOp => Cx (subst GE)
+         | _ => raise Fail "Intermediate code internal error 2"
+    end
 
 fun binOpStrExp {left,oper,right} =
-	Ex (CONST 0) (*COMPLETAR*)
-
+    let val l = unEx left
+        val r = unEx right
+        fun subst oper = fn(t, f) => CJUMP(oper, ESEQ (EXP (externalCall ("_StringCompare", [l,r])), TEMP rv), CONST 0, t, f)
+    in case oper of
+         EqOp => Cx (subst EQ)
+         | NeqOp => Cx (subst NE)
+         | LtOp => Cx (subst LT)
+         | LeOp => Cx (subst LE)
+         | GtOp => Cx (subst GT)
+         | GeOp => Cx (subst GE)
+         | _ => raise Fail "Intermediato code internal error 3"
+    end
 
 end
