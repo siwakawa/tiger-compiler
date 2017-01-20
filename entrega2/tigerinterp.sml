@@ -3,13 +3,13 @@
 	inter a b c recibe:
 	a: bool - false sólo ejecuta el código, true muestra en cada paso la instrucción a ejecutar y el estado de la memoria y temporarios
 	b: (tigertree.stm list*tigerframe.frame) list - cada elemento de la lista es un par con la lista de tigertree.stm devuelta por el canonizador y el frame de cada función
-	c: (tigertemp.label*string) list - Una lista con un elemento por cada string definido en el código. Cada elemento es un par formado por el label y el string.
-	inter usa: 
+	c: (tigertemp.label*string) list - Una ista con un elemento por cada string definido en el código. Cada elemento es un par formado por el label y el string.
+	inter usa:
 		Constantes de tigerframe: wSz, rv, fp
 		Funciones de tigerframe: formals, exp. formals (Appel, pág 135) debe devolver una lista con los tigerframe.access de cada argumento pasado a la función, esto es el tigerframe.access que se usa en el body de la función para referirse a cada argumento. También debe devolver un tigerframe.access para el static link, como primer elemento de la lista.
 	Nota: en una máquina de N bits los enteros de ML tienen N-1 bits. El intérprete fallará si se usan números muy grandes.
 *)
-structure tigerinterp =
+structure tigerinterp:>tigerinterp =
 struct
 	open tigertab
 	open Dynarray
@@ -18,6 +18,8 @@ struct
 	fun inter showdebug (funfracs: (stm list*tigerframe.frame) list) (stringfracs: (tigertemp.label*string) list) =
 	let
 		(* Memoria y registros *)
+	        (*val _ = print("stringfracs")
+                val _ = List.map (fn (x,y) => print("Guardamos str: "^y^" en el lab:"^x^"\n")) stringfracs*)
 		local
 			val tabTemps: (tigertemp.temp, int ref) Tabla ref = ref (tabNueva())
 			val tabMem: (int, int ref) Tabla ref = ref (tabNueva())
@@ -42,7 +44,7 @@ struct
 			end
 			val loadTemp = load tabTemps
 			val storeTemp = store tabTemps
-			fun getTemps () = 
+			fun getTemps () =
 			let
 				val tabL = tabAList(!tabTemps)
 			in
@@ -95,28 +97,65 @@ struct
 					(update(stringArray, idx, str); storeMem addr idx; addr)
 				end
 		end
-		val _ = List.map (fn (lab, str) => storeLabel lab (storeString str)) stringfracs
+		val _ = List.map (fn (lab, str) => (storeLabel lab (storeString str))) stringfracs
 
 		(* Funciones de biblioteca *)
+                (*
+                   Funcion auxiliar para hacer andar las funciones que manipulan strings
+                   Asumimos como hipótesis que si se trae de memoria una cadena que empieza
+                   con .long entonces esta era una cadena que viene del fuente tiger y que
+                   el string está en strPtr+tigerframe.wSz y tiene el formato .string "[el string]"
+                   Si no tiene un .long entonces viene de entrada standar y el formateado es distinto
+                *)
+                fun getRealString(strPtr:int):string =
+                   let
+                        val str = explode (loadString strPtr)
+                        val (str2,delFuente) = case str of
+                                                #"."::( #"l"::( #"o"::( #"n"::( #"g"::_)))) => (explode (loadString (strPtr + tigerframe.wSz)),true)
+                                               | _ => (str,false)
+                        (* format1 lleva los \x0a y \x09 a \n y \t respectivamente*)
+                        fun format1 [] = []
+                        | format1 (#"\\"::(#"x"::(#"0"::(#"a"::xs)))) = #"\n"::format1 xs
+                        | format1 (#"\\"::(#"x"::(#"0"::(#"9"::xs)))) = #"\t"::format1 xs
+                        | format1 (x::xs) = x::format1 xs
+
+                        (*front quita la comilla al final de un string del fuente*)
+                        fun front [] = raise Fail "front en []"
+                        | front [x] = []
+                        | front (x::xs) = x :: front xs
+
+                        (*ripFront quita el .string " del inicio de un string del fuente*)
+                        fun ripFront xs = List.drop(xs, 9)
+
+                        val finalStr = if delFuente
+                                       then (front o ripFront o format1) str2
+                                       else str2
+                   in
+			implode finalStr
+                   end
+
+
+
 		fun initArray(siz::init::rest) =
 		let
-			val mem = getNewMem(siz)
-			val l = (mem+1, siz)::(List.tabulate(siz, (fn x => (mem+tigerframe.wSz*x, init))))
+			val mem = getNewMem(siz+1)
+			val l = (mem, siz)::(List.tabulate(siz, (fn x => (mem+tigerframe.wSz*(x+1), init))))
 			val _ = List.map (fn (a,v) => storeMem a v) l
 		in
-			mem
+			mem+tigerframe.wSz
 		end
 		| initArray _ = raise Fail("No debería pasar (initArray)")
 
 		fun checkIndexArray(arr::idx::rest) =
 		let
-			val siz = loadMem (arr+1)
-			val _ = if (idx>=siz orelse idx<0) then raise Fail("Índice fuara de rango\n") else ()
+			val siz = loadMem (arr-tigerframe.wSz)
+   (*val _ = print("Size:"^makestring arr^"\n")*)
+			val _ = if (idx>=siz orelse idx<0) then raise Fail("Índice fuera de rango"^" siz:"^Int.toString siz^" idx:"^Int.toString idx^"\n") else ()
 		in
 			0
 		end
 		| checkIndexArray _ = raise Fail("No debería pasar (checkIndexArray)")
-		
+
 		fun allocRecord(ctos::vals) =
 		let
 			val mem = getNewMem(ctos)
@@ -127,7 +166,7 @@ struct
 			mem
 		end
 		| allocRecord _ = raise Fail("No debería pasar (allocRecord)")
-		
+
 		fun checkNil(r::rest) =
 		let
 			val _ = if (r=0) then raise Fail("Nil\n") else ()
@@ -138,8 +177,12 @@ struct
 
 		fun stringCompare(strPtr1::strPtr2::rest) =
 		let
-			val str1 = loadString strPtr1
-			val str2 = loadString strPtr2
+                        val str1 = getRealString strPtr1
+                        val str2 = getRealString strPtr2
+                      (*
+                        val _ = print("Comparación entre "^str1^" y "^str2^"\n")
+                        val _ = if str1 = str2 then print("SON IGUALES\n") else print("SON DISTINTAS\n")
+                      *)
 			val res = String.compare(str1, str2)
 		in
 			case res of
@@ -151,8 +194,8 @@ struct
 
 		fun printFun(strPtr::rest) =
 		let
-			val str = loadString strPtr
-			val _ = print(str)
+			val str = getRealString strPtr
+			val _ = print(str^"\n")
 		in
 			0
 		end
@@ -162,10 +205,10 @@ struct
 
 		fun ordFun(strPtr::rest) =
 		let
-			val str = loadString strPtr
-			val ch = hd(explode(str))
+                        val str = getRealString strPtr
+                        val ch = (hd o explode) str
 		in
-			ord(ch)
+                        ord(ch)
 		end
 		| ordFun _ = raise Fail("No debería pasar (ordFun)")
 
@@ -180,7 +223,7 @@ struct
 
 		fun sizeFun(strPtr::rest) =
 		let
-			val str = loadString strPtr
+			val str = getRealString strPtr (* loadString strPtr*)
 		in
 			String.size(str)
 		end
@@ -188,7 +231,7 @@ struct
 
 		fun substringFun(strPtr::first::n::rest) =
 		let
-			val str = loadString strPtr
+			val str = getRealString strPtr (*loadString strPtr*)
 			val substr = String.substring(str, first, n)
 		in
 			storeString substr
@@ -197,8 +240,8 @@ struct
 
 		fun concatFun(strPtr1::strPtr2::rest) =
 		let
-			val str1 = loadString strPtr1
-			val str2 = loadString strPtr2
+			val str1 = getRealString strPtr1 (*loadString strPtr1*)
+			val str2 = getRealString strPtr2 (* loadString strPtr2*)
 			val res = str1^str2
 		in
 			storeString res
@@ -209,14 +252,30 @@ struct
 			if (v=0) then 1 else 0
 		| notFun _ = raise Fail("No debería pasar (notFun)")
 
-		fun getstrFun(args) = 
+		fun getstrFun(args) =
 		let
-			val str = TextIO.inputLine TextIO.stdIn
-            val r_str = case str of
-             SOME(x) => x
-             | NONE => "error"
+
+			(*
+                          Estaba así
+                          val str = TextIO.inputLine TextIO.stdIn
+                        *)
+                        (*
+                          Tiger llama a esta función con getchar, así que espera un string de longitud 1
+                        *)
+                        val chr = TextIO.input1 TextIO.stdIn
+                        val str = case chr of
+                                     NONE => raise Fail "error input NONE"
+                                     | SOME c => implode [c]
+                        (*
+                           NOTA: hay que usar implode [c] y no Char.toString c porque
+                           implode [#"\n"] = "\n"
+                           Char.toString #"\n" = "\\n"
+
+                        *)
+                        (*if c = #"\n" then Char.toString (#"\n") else Char.toString c*)
+                        (*val _ = print("Ingresaron un "^str^" \n")*)
 		in
-			storeString r_str
+			storeString str
 		end
 
 		val tabLib: (tigertemp.label, int list -> int) Tabla =
@@ -225,7 +284,7 @@ struct
 				("_checkIndexArray", checkIndexArray),
 				("_allocRecord", allocRecord),
 				("_checkNil", checkNil),
-				("_stringcmp", stringCompare),
+				("_stringCompare", stringCompare),
 				("print", printFun),
 				("flush", flushFun),
 				("ord", ordFun),
@@ -315,11 +374,10 @@ struct
 			let
 				(* Encontrar la función*)
 				val ffrac = List.filter (fn (body, frame) => tigerframe.name(frame)=f) funfracs
-				val _ = if (List.length(ffrac)<>1) then raise Fail ("No se encuentra la función, o repetida: "^f^"\n") else ()
-				val (body, frame) = case ffrac of
-                  [(bod, fr)] => (bod, fr)
-                  | _ => raise Fail "Error"
-                  (*TODO completar error fail*)
+			(*	val _ = if (List.length(ffrac)<>1) then raise Fail ("No se encuentra la función, o repetida: "^f^"\n") else () *)
+				val (body, frame) = (case ffrac of
+                               [(b,f)] => (b,f)
+                              | _ => raise Fail ("No se encuentra la función, o repetida: "^f^"\n"))
 				(* Mostrar qué se está haciendo, si showdebug *)
 				val _ = if showdebug then (print((tigerframe.name frame)^":\n");List.app (print o tigerit.tree) body; print("Argumentos: "); List.app (fn n => (print(Int.toString(n)); print("  "))) args; print("\n")) else ()
 
@@ -355,12 +413,12 @@ struct
 				(* Poner argumentos donde la función los espera *)
 				val formals = map (fn x => tigerframe.exp x (TEMP tigerframe.fp)) (tigerframe.formals frame)
 				val formalsValues = ListPair.zip(formals, args)
-				val _ = map (fn (x,y) => 
+				val _ = map (fn (x,y) =>
 					case x of
 						TEMP t => storeTemp t y
 						| MEM m => storeMem (evalExp m) y
-                        (*TODO completar error*)
-                        | _ => raise Fail "error") formalsValues
+            | _ => raise Fail "Esto no es una dirección de memoria ni registro") formalsValues
+
 				(* Ejecutar la lista de instrucciones *)
 				val _ = execute body
 				val rv = loadTemp tigerframe.rv
