@@ -222,9 +222,10 @@ fun transExp(venv, tenv) =
                             if tipoReal (#ty ttest) <> TInt 
                             then error("Error in condition type", nl) 
                             else error("While expression cannot return a value", nl)
+               val while_ci = whileExp {test=(#exp ttest), body=(#exp tbody), lev=topLevel()}
                val _ = postWhileForExp()
 			in
-				{exp=whileExp {test=(#exp ttest), body=(#exp tbody), lev=topLevel()}, ty=TUnit}
+				{exp=while_ci, ty=TUnit}
 			end
 		| trexp(ForExp({var, escape, lo, hi, body}, nl)) =
             let val {exp=explo, ty=tylo} = trexp lo
@@ -241,7 +242,7 @@ fun transExp(venv, tenv) =
                 val ev' = simpleVar(acc', 0)
                 val ef'= forExp({lo=explo, hi=exphi, var=ev', body=eb'})
                 val _ = postWhileForExp()
-			in {exp=eb', ty=tb'} 
+			in {exp=ef', ty=TUnit} 
             end
 		| trexp(LetExp({decs, body}, _)) =
 			let
@@ -304,10 +305,10 @@ fun transExp(venv, tenv) =
                 val acc = allocLocal (topLevel()) (!escape)
                 val lvl = getActualLev()
                 val venv' = tabRInserta (name, Var({ty=init_typ, access=acc, level=lvl}), venv)
-            in (venv', tenv, [])
+            in (venv', tenv, [varDec(acc,init_exp)])
             end
 		| trdec (venv,tenv) (VarDec ({name,escape,typ=SOME s,init},pos)) =
-            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+            let val {exp=init_exp, ty=init_typ} = transExp (venv, tenv) init
                 val real_s = case tabBusca(s, tenv)
                               of SOME(x) => tipoReal(x)
                                  | _ => error("Type of declared variable does not exist", pos)
@@ -315,7 +316,7 @@ fun transExp(venv, tenv) =
                 val acc = allocLocal (topLevel()) (!escape)
                 val lvl = getActualLev()
                 val venv' = tabRInserta (name, Var({ty=real_s, access=acc, level=lvl}), venv)
-            in (venv', tenv, [])
+            in (venv', tenv, [varDec(acc,init_exp)])
             end
 		| trdec (venv,tenv) (FunctionDec fs) =
              let fun checkTip(name,pos) = case tabBusca(name, tenv) of
@@ -323,14 +324,14 @@ fun transExp(venv, tenv) =
                                             |_ => error("Type not defined "^name, pos)
                  fun transTy(NameTy(s), pos) = checkTip(s,pos)
                      | transTy(_, pos) = TUnit
-                 fun get_params_tips(fields,pos) = map (fn({name=n,escape=_,typ=t}) => (transTy(t, pos))) fields
+                 fun get_params_tips(fields,pos) = map (fn({name=n,escape=e,typ=t}) => {ty=(transTy(t, pos)), esc=e}) fields
                  fun get_sig({name=s, params=ps, result=SOME(rt), body=_}, pos) = (s, get_params_tips(ps,pos), checkTip(rt,pos))
                      | get_sig({name=s, params=ps, result=NONE, body=e}, pos) = (s, get_params_tips(ps,pos), TUnit)
                  fun get_func_entry(name, params, result) = 
                    let val parent=topLevel()
-                       (*TODO COMPLETAR ver formals*)
-                       val new_level=newLevel({parent=parent, name=name, formals=[]})
-                   in (name, Func({level=new_level, label=tigertemp.newlabel(), formals=params, result=result, extern=false}))
+                       val escapes = map (! o #esc) params
+                       val new_level=newLevel({parent=parent, name=name, formals=escapes})
+                   in (name, Func({level=new_level, label=name, formals=map (#ty) params, result=result, extern=false}))
                    end
                  val sigs = map get_sig fs
                  fun has_more_that_one_definition(f_name, signature_list) =  

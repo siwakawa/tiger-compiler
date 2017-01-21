@@ -146,8 +146,6 @@ fun simpleVar(acc, level) =
                      in Ex(MEM(BINOP(PLUS, aux(getActualLev() - level), CONST k))) 
                      end
 
-fun varDec(acc) = simpleVar(acc, getActualLev())
-
 fun fieldVar(var, field) = 
 let
 	val a = unEx var
@@ -194,7 +192,7 @@ let
 	val s = unEx size
 	val i = unEx init
 in
-	Ex (externalCall("allocArray", [s, i]))
+	Ex (externalCall("_initArray", [s, i]))
 end
 
 fun callExp (name,external,isproc,lev:level,ls) = 
@@ -343,6 +341,12 @@ let
 in
 	Nx (MOVE(v,vl))
 end
+
+fun varDec(acc, initexp) = 
+    let val var = simpleVar(acc, getActualLev())
+    in assignExp({var=var, exp=initexp})
+    end
+
 
 fun binOpIntExp {left, oper, right} = 
     let val l = unEx left
