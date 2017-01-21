@@ -29,8 +29,20 @@ fun main(args) =
 		val expr = prog Tok lexbuf handle _ => errParsing lexbuf
 		val _ = findEscape(expr)
 		val _ = if arbol then tigerpp.exprAst expr else ()
+
+		val _ = transProg(expr);
+        val frags = tigertrans.getResult()
+        fun filter_fun_frags (tigerframe.PROC(_)) = true
+            | filter_fun_frags _  = false 
+        val fun_frags = List.filter filter_fun_frags frags
+        val string_frags = List.filter (fn x => not (filter_fun_frags x)) frags
+
+        val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
+        val unpacked_string_flags = List.map (fn(tigerframe.STRING(x)) => x | _ => raise Fail "Internal error") string_frags
+
+        val _ = if inter then tigerinterp.inter true canonized_blocks unpacked_string_flags else ()
+
 	in
-		transProg(expr);
 		print "yes!!\n"
 	end	handle Fail s => print("Fail: "^s^"\n")
 

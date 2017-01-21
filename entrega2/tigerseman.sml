@@ -297,7 +297,7 @@ fun transExp(venv, tenv) =
              in {exp=subscriptVar(expvar, expsub), ty=elemtype}
              end
 		and trdec (venv, tenv) (VarDec ({name,escape,typ=NONE,init},pos)) = 
-            let val {exp=_, ty=init_typ} = transExp (venv, tenv) init
+            let val {exp=init_exp, ty=init_typ} = transExp (venv, tenv) init
                 val _ = case init_typ
                          of TNil => error("If the initializing expression is nil, then the long form must be used", pos)
                             | _ => ()

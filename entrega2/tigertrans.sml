@@ -154,7 +154,7 @@ let
 	val rv = newtemp()
 in
 	Ex( ESEQ(seq[MOVE(TEMP rv, a),
-		EXP(externalCall("_checknotnil", [TEMP rv]))],
+		EXP(externalCall("_checkNil", [TEMP rv]))],
 		MEM(BINOP(PLUS, TEMP rv, CONST (field*tigerframe.wSz)))))
 end
 
@@ -168,7 +168,7 @@ let
 in
 	Ex( ESEQ(seq[MOVE(TEMP ra, a),
 		MOVE(TEMP ri, i),
-		EXP(externalCall("_checkindex", [TEMP ra, TEMP ri]))],
+		EXP(externalCall("_checkIndexArray", [TEMP ra, TEMP ri]))],
 		MEM(BINOP(PLUS, TEMP ra,
 			BINOP(MUL, TEMP ri, CONST tigerframe.wSz)))))
 end
