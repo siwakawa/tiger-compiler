@@ -21,10 +21,15 @@ open tigertree
 
 type level = int
 
-val fp = "FP"				(* frame pointer *)
-val sp = "SP"				(* stack pointer *)
-val rv = "RV"				(* return value  *)
+val fp = "FP"				(* frame pointer (ebp in 386)*)
+val sp = "SP"				(* stack pointer (esp in 386) *)
+val rv = "RV"				(* return value  (eax in 386) *)
 val ov = "OV"				(* overflow value (edx en el 386) *)
+val ebx = "EBX"               (* base of array (ebx in 386) *)
+val ecx = "ECX"               (* counter (ecx in 386) *)
+val esi = "ESI"               (* source index for string operations (esi in 386) *)
+val edi = "EDI"               (* destination index for string operations (esi in 386) *)
+val eip = "EIP"               (* instruction pointer (eip in 386) *)
 val wSz = 4					(* word size in bytes *)
 val log2WSz = 2				(* base two logarithm of word size in bytes *)
 val fpPrev = 0				(* offset (bytes) *)
@@ -38,8 +43,8 @@ val localsGap = ~4 			(* bytes *)
 val calldefs = [rv]
 val specialregs = [rv, fp, sp]
 val argregs = []
-val callersaves = []
-val calleesaves = []
+val callersaves = [rv, ecx, ov]
+val calleesaves = [fp, ebx, edi, esi]
 
 type frame = {
 	name: string,
@@ -85,5 +90,22 @@ fun exp(InFrame k) e = MEM(BINOP(PLUS, TEMP(fp), CONST k))
 | exp(InReg l) e = TEMP l
 fun externalCall(s, l) = CALL(NAME s, l)
 
-fun procEntryExit1 (frame,body) = body
+(* based on tigertrans.seq *)
+fun create_stm_seq [] = EXP (CONST 0)
+    | create_stm_seq [x] = x
+    | create_stm_seq (x::xs) = SEQ (x, create_stm_seq xs)
+
+fun procEntryExit1 (frame,body) =
+    let
+        val callee_data = map (fn(r) => {reg=TEMP(r), stack_access=allocLocal frame true}) calleesaves
+        (* save the values in the registers to the stack (exp's second argument does not matter*)
+        val save_callees_instructions = map (fn({reg=r, stack_access=acc}) => MOVE(exp acc 0, r)) callee_data
+
+        (* restore the saved values to their respective registers *)
+        val restore_callees_instructions = map (fn({reg=r, stack_access=acc}) => MOVE(r, exp acc 0)) callee_data
+    in
+        (* save the registers, execute the body, and restore the registers *)
+        create_stm_seq (save_callees_instructions @ [body] @ restore_callees_instructions)
+end
+
 end
