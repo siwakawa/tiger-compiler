@@ -39,8 +39,23 @@ fun main(args) =
 
         val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
         val unpacked_string_flags = List.map (fn(tigerframe.STRING(x)) => x | _ => raise Fail "Internal error") string_frags
-
         val _ = if inter then tigerinterp.inter true canonized_blocks unpacked_string_flags else ()
+
+         val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
+         val assem_trees = List.map (fn(stm_list, f) => 
+                             let val asm_without_prolog = List.concat (List.map (fn(stm) => tigercodegen.codegen f stm) stm_list)
+                             in tigerframe.procEntryExit3(f, asm_without_prolog)
+                             end) canonized_blocks
+
+         val asm_formatter = tigerassem.format(tigertemp.makeString)
+
+         val _ = List.map (fn({prolog=p,body=b,epilog=e}) => 
+                            let val bodies_w_format = List.map asm_formatter b
+                            in print p; map print bodies_w_format; print e
+                            end) assem_trees
+(*         val _ = List.map (fn(instr_ls) => List.map asm_formatter instr_ls) assem_trees *)
+
+(*        val assemTrees = List.map (fn(stm, frame) => tigercodegen.codegen frame stm | _ => raise Fail "Internal error") canonized_blocks*)
 
 	in
 		print "yes!!\n"

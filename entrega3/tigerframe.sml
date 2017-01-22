@@ -21,15 +21,15 @@ open tigertree
 
 type level = int
 
-val fp = "FP"				(* frame pointer (ebp in 386)*)
-val sp = "SP"				(* stack pointer (esp in 386) *)
-val rv = "RV"				(* return value  (eax in 386) *)
-val ov = "OV"				(* overflow value (edx en el 386) *)
-val ebx = "EBX"               (* base of array (ebx in 386) *)
-val ecx = "ECX"               (* counter (ecx in 386) *)
-val esi = "ESI"               (* source index for string operations (esi in 386) *)
-val edi = "EDI"               (* destination index for string operations (esi in 386) *)
-val eip = "EIP"               (* instruction pointer (eip in 386) *)
+val fp = "%ebp"				(* frame pointer (ebp in 386)*)
+val sp = "%esp"				(* stack pointer (esp in 386) *)
+val rv = "%eax"				(* return value  (eax in 386) *)
+val ov = "%edx"				(* overflow value (edx en el 386) *)
+val ebx = "%ebx"               (* base of array (ebx in 386) *)
+val ecx = "%ecx"               (* counter (ecx in 386) *)
+val esi = "%esi"               (* source index for string operations (esi in 386) *)
+val edi = "%edi"               (* destination index for string operations (esi in 386) *)
+val eip = "%eip"               (* instruction pointer (eip in 386) *)
 val wSz = 4					(* word size in bytes *)
 val log2WSz = 2				(* base two logarithm of word size in bytes *)
 val fpPrev = 0				(* offset (bytes) *)
@@ -106,6 +106,19 @@ fun procEntryExit1 (frame,body) =
     in
         (* save the registers, execute the body, and restore the registers *)
         create_stm_seq (save_callees_instructions @ [body] @ restore_callees_instructions)
-end
+    end
 
+(* TODO Is this necessary? we already save the calleesaves in procEntryExit1
+fun procEntryExit2 (frame,body) =
+    body@[tigerassem.OPER{assem="", src=[sp]@calleesaves, dst=[], jump=NONE}] *)
+
+fun procEntryExit3({name=n, formals=ps, locals=ls, actualArg=_, actualLocal=_, actualReg=_}, body) = 
+    {prolog = ".globl " ^n ^ "\n"^
+              n ^ ":\n"^
+              "pushl %ebp\n" ^
+              "movl %esp, %ebp\n" ^
+              "subl $~"^Int.toString (length ls) ^", %esp\n",
+     body = body,
+     epilog = "leave\nret\n"}
+    
 end
