@@ -19,8 +19,9 @@ fun main(args) =
 		val (code, l5)		= arg(l4, "-code") 
 		val (flow, l6)		= arg(l5, "-flow") 
 		val (inter, l7)		= arg(l6, "-inter") 
+		val (fold, l8)		= arg(l7, "-fold") 
 		val entrada =
-			case l7 of
+			case l8 of
 			[n] => ((open_in n)
 					handle _ => raise Fail (n^" no existe!"))
 			| [] => std_in
@@ -42,6 +43,11 @@ fun main(args) =
         val _ = if inter then tigerinterp.inter true canonized_blocks unpacked_string_flags else ()
 
          val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
+
+         val folded_canonized_blocks = List.map (fn(stm_ls, f) => ((map tigerfold.foldStm stm_ls), f)) canonized_blocks
+
+         val _ = if fold then tigerinterp.inter true folded_canonized_blocks unpacked_string_flags else ()
+
          val assem_trees = List.map (fn(stm_list, f) => 
                              let val asm_without_prolog = List.concat (List.map (fn(stm) => tigercodegen.codegen f stm) stm_list)
                              in tigerframe.procEntryExit3(f, asm_without_prolog)

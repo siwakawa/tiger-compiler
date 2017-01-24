@@ -26,7 +26,7 @@ EXEFILE=
 
 GRALOBJS= tigerabs.uo tigergrm.uo tigerlex.uo tigercanon.uo \
 	tigernlin.uo tigerpp.uo tigerescap.uo tigertab.uo tigertopsort.uo tigerseman.uo tigertemp.uo  tigertree.uo \
-	tigermuestratipos.uo tigerframe.uo tigertrans.uo tigerit.uo tigerpila.uo tigerinterp.uo tigermain.uo tigerassem.uo tigercodegen.uo
+	tigermuestratipos.uo tigerframe.uo tigertrans.uo tigerit.uo tigerpila.uo tigerinterp.uo tigermain.uo tigerassem.uo tigercodegen.uo tigerfold.sml
 
 all: tiger
 
@@ -88,7 +88,7 @@ tigertopsort.uo: tigertopsort.ui tigertab.ui tigertips.uo tigerabs.uo
 tigerpp.uo: tigerabs.uo 
 tigermain.uo: tigerseman.ui tigerescap.ui tigergrm.ui tigerframe.ui \
     tigerit.uo tigercanon.ui tigerinterp.ui tigerlex.uo tigertrans.ui \
-    tigerpp.uo tigercodegen.ui
+    tigerpp.uo tigercodegen.ui tigerfold.uo
 tigertab.uo: tigertab.ui 
 tigergrm.ui: tigerabs.uo 
 tigerescap.uo: tigerescap.ui tigertab.ui tigerabs.uo 
@@ -101,3 +101,4 @@ tigerinterp.uo: tigerinterp.ui tigertree.uo tigertab.ui tigerframe.ui \
 tigercodegen.ui: tigerassem.uo tigerframe.ui
 tigercodegen.uo: tigercodegen.ui tigerassem.uo tigerframe.ui tigerframe.uo
 tigerassem.uo: tigertemp.ui
+tigerfold.uo: tigertree.ui tigertree.uo
