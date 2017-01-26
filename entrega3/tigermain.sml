@@ -55,13 +55,25 @@ fun main(args) =
 
          val asm_formatter = tigerassem.format(tigertemp.makeString)
 
-         val _ = List.map (fn({prolog=p,body=b,epilog=e}) => 
+         val _ = if code then (List.app (fn({prolog=p,body=b,epilog=e}) => 
                             let val bodies_w_format = List.map asm_formatter b
                             in print p; map print bodies_w_format; print e
-                            end) assem_trees
-(*         val _ = List.map (fn(instr_ls) => List.map asm_formatter instr_ls) assem_trees *)
+                            end) assem_trees)
+                         else ()
 
-(*        val assemTrees = List.map (fn(stm, frame) => tigercodegen.codegen frame stm | _ => raise Fail "Internal error") canonized_blocks*)
+        val fgraph = List.map (fn({body=b,...}) => tigerflowgraph.instrs2graph b) assem_trees
+        val defs_list = List.map (fn((tigerflowgraph.FGRAPH({def=ds,...}),_)) => ds) fgraph
+        val uses_list = List.map (fn((tigerflowgraph.FGRAPH({use=us,...}),_)) => us) fgraph
+        val ismove_list = List.map (fn((tigerflowgraph.FGRAPH({ismove=i,...}),_)) => i) fgraph
+        fun print_defs_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Defs: "^(String.concatWith ";" temp_list) ^"\n")
+        fun print_uses_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Uses: "^(String.concatWith ";" temp_list) ^"\n")
+        fun print_ismove_dictentry(n, im) = print("Node: "^(Int.toString(#2 n)) ^", IsMove: "^(Bool.toString(im)) ^"\n")
+        val _ = print("Defs of each node: \n")
+        val _ = List.app (fn(dic) => Splaymap.app print_defs_dictentry dic) defs_list
+        val _ = print("Uses of each node: \n")
+        val _ = List.app (fn(dic) => Splaymap.app print_uses_dictentry dic) uses_list
+        val _ = print("IsMove of each node: \n")
+        val _ = List.app (fn(dic) => Splaymap.app print_ismove_dictentry dic) ismove_list
 
 	in
 		print "yes!!\n"
