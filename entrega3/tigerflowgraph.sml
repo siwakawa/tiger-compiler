@@ -67,7 +67,7 @@ struct
                                              end
  
 
-    fun algo(fgraph, instructions) = let val predInfo= Splaymap.mkDict(Int.compare)
+    fun createFlowGraph(fgraph, instructions) = let val predInfo= Splaymap.mkDict(Int.compare)
                                          val edgeInfo= Splaymap.mkDict(String.compare)
                                          val (FGRAPH{control=g', def=d, use=u, ismove=im}, labelToNodeMap, nodeToPredLabels) = firstPass(fgraph, edgeInfo, predInfo, instructions)
                                          fun add_preds_and_sucs((g, n)) = let val pred_labels = case Splaymap.peek(nodeToPredLabels, n) of
@@ -82,56 +82,52 @@ struct
     fun instrs2graph(inst_ls) = let 
                                     fun forder((g1,n1),(g2,n2)) = Int.compare(n1, n2)
                                     val empty_fg = FGRAPH{control=newGraph(), def=Splaymap.mkDict(forder), use=Splaymap.mkDict(forder), ismove=Splaymap.mkDict(forder)}
-                                in algo(empty_fg, inst_ls)
+                                in createFlowGraph(empty_fg, inst_ls)
                                 end
 
 
                                                                  
                                                                                       
+    fun algo(FGRAPH(fgraph)) = let val nodes = tigergraph.nodes(#control fgraph)
+                           fun comp_node((g1,n1),(g2,n2)) = Int.compare(n1, n2)
+                           val new_ins = Splaymap.mkDict(comp_node)
+                           val new_outs = Splaymap.mkDict(comp_node)
+                           (* sets_changed is a bool that indicates that (for some node n), the news ins/outs obtained are different from the old ones *)
+                           fun fold_algo'(n : node, (ins, outs, keep_iterating)) =
+                               let val control = #control fgraph
+                                   val ins_n = case Splaymap.peek(ins, n) of
+                                                SOME(s) => s
+                                                | NONE => Splayset.empty(String.compare)
+                                   val outs_n = case Splaymap.peek(outs, n) of
+                                                 SOME(s) => s
+                                                 | NONE => Splayset.empty(String.compare)
+                                   val defs_n = Splaymap.find(#def fgraph, n)
+                                   val uses_n = Splaymap.find(#use fgraph, n)
+                                   val defs_set_n = Splayset.addList(Splayset.empty(String.compare), defs_n)
+                                   val uses_set_n = Splayset.addList(Splayset.empty(String.compare), uses_n)
+                                   val succ_n = List.map (fn(gr,nod) => nod) (tigergraph.succ(n))
+                                   val ins_n' = Splayset.union(uses_set_n, Splayset.difference(outs_n, defs_set_n))
+                                   fun union_fold((node, set)) = let val ins_node = case Splaymap.peek(ins, n) of
+                                                                                     SOME(s) => s
+                                                                                     | NONE => Splayset.empty(String.compare)
+                                                                 in Splayset.union(set, ins_node) 
+                                                                 end
+                                   val succs_node = List.map (fn(gr,nod) => nod) (tigergraph.succ(n))
+                                   val outs_n' = List.foldr union_fold (Splayset.empty(String.compare)) succs_node
+                                   val ins' = Splaymap.insert(ins, n, ins_n')
+                                   val outs' = Splaymap.insert(outs, n, outs_n')
 
-    (*Takes a graph and an instruction, and returns the graph with a new node (the instruction) and the node*)
-    (*flowgraph->instruction->(flowgraph, node')*)
-(*    fun fillGraphWithInstructions(fgraph, instructions) = let 
-                                                  val edgeInfo = Splaymap.mkDict(fn((g1,n1),(g2,n2)) => Int.compare(n1, n2))
-                                                  val (graph_without_succpred, edgeInfo') = firstPass(fgraph, edgeInfo, instructions)
+                                   val are_ins_n_changed = not(Splayset.equal(ins_n, ins_n'))
+                                   val are_outs_n_changed = not(Splayset.equal(outs_n, outs_n'))
+                               in (ins', outs', keep_iterating orelse (are_ins_n_changed orelse are_outs_n_changed))
+                               end
+                           fun iterate_algo_once(ins, outs) = List.foldr fold_algo' (ins, outs, false) nodes
+                           fun iterate_until_solution(ins, outs) = let val (ins', outs', keep_iterating) = iterate_algo_once(ins, outs)
+                                                                   in if keep_iterating then iterate_until_solution(ins', outs') else (ins', outs')
+                                                                   end
 
-                                              in (FGRAPH{control=(#1 n'), def=newDef, use=newUse, ismove=newIsMove}, #2 n')
-                                              end
-
-    fun instrs2graph(inst_ls) = let 
-                                    fun forder((g1,n1),(g2,n2)) = Int.compare(n1, n2)
-                                    val empty_fg = FGRAPH{control=newGraph(), def=Splaymap.mkDict(forder), use=Splaymap.mkDict(forder), ismove=Splaymap.mkDict(forder)}
-                                    fun fold_graph(instr, (g, node_list)) = 
-                                      let val (g', n') = addInsToFGraph(g, instr)
-                                      in (g', n'::node_list)
-                                      end
-                                in foldr fold_graph (empty_fg, []) inst_ls
-                                end
-
-    fun algo(g, node_list) = let 
-                                 fun forder((g1,n1),(g2,n2)) = Int.compare(n1, n2)
-                                     val new_ins = Splaymap.mkDict(forder)
-                                     val new_outs = Splaymap.mkDict(forder)
-                                     fun algo'((ng, n), ins, outs) =
-                                        let val ins_n = case Splaymap.peek(ins, n) of
-                                                           SOME(s) => s
-                                                         | NONE => Splayset.empty(String.compare)
-                                            val outs_n = case Splaymap.peek(outs, n) of
-                                                           SOME(s) => s
-                                                         | NONE => Splayset.empty(String.compare)
-                                            val defs_n = Splaymap.find(#def ng, n)
-                                            val uses_n = Splaymap.find(#def ng, n)
-                                            val defs_set_n = Splayset.addList(Splayset.empty(String.compare), defs_n)
-                                            val uses_set_n = Splayset.addList(Splayset.empty(String.compare), uses_n)
-                                            val ins' = Splayset.union(uses_set_n, Splayset.difference(outs_n, defs_set_n))
-                                            val ins = Splaymap.insert(ins, n, ins')
-                                        in ()
-                                        end
-                                    val _ = algo'((g, 1), new_ins, new_outs)
-                             in ()
-                             end
-                                        *)
-
-
+                        val (final_ins, final_outs) = iterate_until_solution(new_ins, new_outs)
+                        in (final_ins, final_outs) 
+                        end
 
 end

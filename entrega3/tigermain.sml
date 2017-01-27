@@ -62,18 +62,32 @@ fun main(args) =
                          else ()
 
         val fgraph = List.map (fn({body=b,...}) => tigerflowgraph.instrs2graph b) assem_trees
-        val defs_list = List.map (fn((tigerflowgraph.FGRAPH({def=ds,...}),_)) => ds) fgraph
-        val uses_list = List.map (fn((tigerflowgraph.FGRAPH({use=us,...}),_)) => us) fgraph
-        val ismove_list = List.map (fn((tigerflowgraph.FGRAPH({ismove=i,...}),_)) => i) fgraph
-        fun print_defs_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Defs: "^(String.concatWith ";" temp_list) ^"\n")
-        fun print_uses_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Uses: "^(String.concatWith ";" temp_list) ^"\n")
-        fun print_ismove_dictentry(n, im) = print("Node: "^(Int.toString(#2 n)) ^", IsMove: "^(Bool.toString(im)) ^"\n")
-        val _ = print("Defs of each node: \n")
-        val _ = List.app (fn(dic) => Splaymap.app print_defs_dictentry dic) defs_list
-        val _ = print("Uses of each node: \n")
-        val _ = List.app (fn(dic) => Splaymap.app print_uses_dictentry dic) uses_list
-        val _ = print("IsMove of each node: \n")
-        val _ = List.app (fn(dic) => Splaymap.app print_ismove_dictentry dic) ismove_list
+        fun print_fgraph(fg) = let
+            val defs_list = List.map (fn((tigerflowgraph.FGRAPH({def=ds,...}),_)) => ds) fgraph
+            val uses_list = List.map (fn((tigerflowgraph.FGRAPH({use=us,...}),_)) => us) fgraph
+            val ismove_list = List.map (fn((tigerflowgraph.FGRAPH({ismove=i,...}),_)) => i) fgraph
+            val nodes_graph_list = List.map (fn((tigerflowgraph.FGRAPH({control=g,...}),_)) => tigergraph.nodes g) fgraph
+            fun get_list_nodes_string(ns) = String.concatWith "," (List.map (fn((g,n)) => Int.toString n) ns)
+            fun print_node_pred_suc(g,n) = print("Node "^(Int.toString(n))^", Preds: "^get_list_nodes_string(tigergraph.pred(g,n))^ "; Succs: "^get_list_nodes_string(tigergraph.succ(g,n))^"\n")
+    
+            fun print_defs_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Defs: "^(String.concatWith ";" temp_list) ^"\n")
+            fun print_uses_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Uses: "^(String.concatWith ";" temp_list) ^"\n")
+            fun print_ismove_dictentry(n, im) = print("Node: "^(Int.toString(#2 n)) ^", IsMove: "^(Bool.toString(im)) ^"\n")
+            val _ = print("Defs of each node: \n")
+            val _ = List.app (fn(dic) => Splaymap.app print_defs_dictentry dic) defs_list
+            val _ = print("Uses of each node: \n")
+            val _ = List.app (fn(dic) => Splaymap.app print_uses_dictentry dic) uses_list
+            val _ = print("IsMove of each node: \n")
+            val _ = List.app (fn(dic) => Splaymap.app print_ismove_dictentry dic) ismove_list
+            val _ = print("Succs and preds of each node: \n")
+            val _ = List.app (fn(nodes) => List.app print_node_pred_suc nodes) nodes_graph_list
+         in () end
+
+       val _ = if flow then print_fgraph(fgraph) else ()
+
+       (* test the liveness algorithm *)
+       val tests  = List.map (fn(fg, _) => tigerflowgraph.algo(fg)) fgraph
+       val (ins, outs) = List.nth(tests,0)
 
 	in
 		print "yes!!\n"

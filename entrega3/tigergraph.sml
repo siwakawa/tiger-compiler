@@ -65,12 +65,6 @@ struct
   val mk_edge = diddle_edge (op ::)
   val rm_edge = diddle_edge delete
   
-  type TableListTemp = (node, tigertemp.temp list) Splaymap.dict
-  type TableBool = (node, bool) Splaymap.dict
-
-(*  structure Table = IntMapTable(type key = node
-				fun getInt(g,n) = n) *)
-
 
   fun nodename(g,i:int) = "n" ^ Int.toString(i)
 

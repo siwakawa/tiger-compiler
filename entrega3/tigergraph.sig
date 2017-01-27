@@ -3,8 +3,6 @@ sig
     type graph
     type node' = int
     type node = graph * node'
-    type TableListTemp
-    type TableBool
 
     val nodes: graph -> node list
     val succ: node -> node list
