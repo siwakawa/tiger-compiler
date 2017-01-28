@@ -20,8 +20,9 @@ fun main(args) =
 		val (flow, l6)		= arg(l5, "-flow") 
 		val (inter, l7)		= arg(l6, "-inter") 
 		val (fold, l8)		= arg(l7, "-fold") 
+		val (live, l9)		= arg(l8, "-live") 
 		val entrada =
-			case l8 of
+			case l9 of
 			[n] => ((open_in n)
 					handle _ => raise Fail (n^" no existe!"))
 			| [] => std_in
@@ -70,9 +71,9 @@ fun main(args) =
             fun get_list_nodes_string(ns) = String.concatWith "," (List.map (fn((g,n)) => Int.toString n) ns)
             fun print_node_pred_suc(g,n) = print("Node "^(Int.toString(n))^", Preds: "^get_list_nodes_string(tigergraph.pred(g,n))^ "; Succs: "^get_list_nodes_string(tigergraph.succ(g,n))^"\n")
     
-            fun print_defs_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Defs: "^(String.concatWith ";" temp_list) ^"\n")
-            fun print_uses_dictentry(n, temp_list) = print("Node: "^(Int.toString(#2 n)) ^", Uses: "^(String.concatWith ";" temp_list) ^"\n")
-            fun print_ismove_dictentry(n, im) = print("Node: "^(Int.toString(#2 n)) ^", IsMove: "^(Bool.toString(im)) ^"\n")
+            fun print_defs_dictentry(n, temp_list) = print("Node: "^(Int.toString(n)) ^", Defs: "^(String.concatWith ";" temp_list) ^"\n")
+            fun print_uses_dictentry(n, temp_list) = print("Node: "^(Int.toString(n)) ^", Uses: "^(String.concatWith ";" temp_list) ^"\n")
+            fun print_ismove_dictentry(n, im) = print("Node: "^(Int.toString(n)) ^", IsMove: "^(Bool.toString(im)) ^"\n")
             val _ = print("Defs of each node: \n")
             val _ = List.app (fn(dic) => Splaymap.app print_defs_dictentry dic) defs_list
             val _ = print("Uses of each node: \n")
@@ -85,9 +86,9 @@ fun main(args) =
 
        val _ = if flow then print_fgraph(fgraph) else ()
 
-       (* test the liveness algorithm *)
-       val tests  = List.map (fn(fg, _) => tigerflowgraph.algo(fg)) fgraph
-       val (ins, outs) = List.nth(tests,0)
+       val igraph = List.map (tigerliveness.interferenceGraph o #1) fgraph
+
+       val _ = if live then List.app (tigerliveness.show o #1) igraph else ()
 
 	in
 		print "yes!!\n"
