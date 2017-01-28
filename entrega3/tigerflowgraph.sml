@@ -37,43 +37,50 @@ struct
 
 
 
-(* This function creates the flowgraph without filling the succ and pred information, instead saving in edgeInfo a map label -> node'; and in predInfo a map node'->labels*)
-    fun firstPass(fgraph, edgeInfo, predInfo,  []) = (fgraph, edgeInfo, predInfo)
-      | firstPass(fgraph, edgeInfo, predInfo, (ins as LABEL({lab=l,...}))::t) = let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
+(* This function creates the flowgraph filling the succ and pred information of only the adjacent nodes. The succ and pred information related to jumps is saved in edgeInfo (a map label -> node'); and in succInfo (a map node'->labels)*)
+    fun firstPass(fgraph, edgeInfo, succInfo, lastNode, []) = (fgraph, edgeInfo, succInfo)
+      | firstPass(fgraph, edgeInfo, succInfo, lastNode, (ins as LABEL({lab=l,...}))::t) = let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
                                                                            val (g', n') = newNode g
+                                                                           (* We create an edge from the last node to the current one *)
+                                                                           val _ = if lastNode <> ~1 then mk_edge{from=(g', lastNode), to=(g',n')} else ()
                                                                            val edgeInfo' = Splaymap.insert(edgeInfo, l, n')
                                                                            val newDef = Splaymap.insert(d, n', (getDef ins))
                                                                            val newUse = Splaymap.insert(u, n', (getUse ins))
                                                                            val newIsMove = Splaymap.insert(im, n', isMove ins )
                                                                            val fg' = FGRAPH{control=g', def=newDef, use=newUse, ismove=newIsMove}
-                                                                       in  firstPass(fg', edgeInfo', predInfo, t)
+                                                                       in  firstPass(fg', edgeInfo', succInfo, n', t)
                                                                        end
-       | firstPass(fgraph, edgeInfo, predInfo, (ins as OPER({jump=SOME(ls),...}))::t) = let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
+       | firstPass(fgraph, edgeInfo, succInfo, lastNode, (ins as OPER({jump=SOME(ls),...}))::t) = let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
                                                                                    val (g', n') = newNode g
-                                                                                   val predInfo' = Splaymap.insert(predInfo, n', ls)
+                                                                           (* We create an edge from the last node to the current one *)
+                                                                           val _ = if lastNode <> ~1 then mk_edge{from=(g', lastNode), to=(g',n')} else ()
+                                                                                   val succInfo' = Splaymap.insert(succInfo, n', ls)
                                                                                    val newDef = Splaymap.insert(d, n', (getDef ins))
                                                                                    val newUse = Splaymap.insert(u, n', (getUse ins))
                                                                                    val newIsMove = Splaymap.insert(im, n', isMove ins )
                                                                                    val fg' = FGRAPH{control=g' , def=newDef, use=newUse, ismove=newIsMove}
-                                                                               in  firstPass(fg', edgeInfo, predInfo', t)
+                                                                               (* We want the next instruction to not consider this one as a predecessor, because this one will jump *)
+                                                                               in  firstPass(fg', edgeInfo, succInfo', ~1, t)
                                                                                end
-      | firstPass(fgraph, edgeInfo, predInfo, ins::t) =  let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
+      | firstPass(fgraph, edgeInfo, succInfo, lastNode, ins::t) =  let val FGRAPH{control=g, def=d, use=u, ismove=im} = fgraph
                                                  val (g', n') = newNode g
+                                                (* We create an edge from the last node to the current one *)
+                                                val _ = if lastNode <> ~1 then mk_edge{from=(g', lastNode), to=(g',n')} else ()
                                                  val newDef = Splaymap.insert(d, n', (getDef ins))
                                                  val newUse = Splaymap.insert(u, n', (getUse ins))
                                                  val newIsMove = Splaymap.insert(im, n', isMove ins )
                                                  val fg' = FGRAPH{control=g', def=newDef, use=newUse, ismove=newIsMove}
-                                             in  firstPass(fg', edgeInfo, predInfo, t)
+                                             in  firstPass(fg', edgeInfo, succInfo, n',  t)
                                              end
  
 
-    fun createFlowGraph(fgraph, instructions) = let val predInfo= Splaymap.mkDict(Int.compare)
+    fun createFlowGraph(fgraph, instructions) = let val succInfo= Splaymap.mkDict(Int.compare)
                                          val edgeInfo=Splaymap.mkDict(String.compare)
-                                         val (FGRAPH{control=g', def=d, use=u, ismove=im}, labelToNodeMap, nodeToPredLabels) = firstPass(fgraph, edgeInfo, predInfo, instructions)
-                                         fun add_preds_and_sucs((g, n)) = let val pred_labels = case Splaymap.peek(nodeToPredLabels, n) of
+                                         val (FGRAPH{control=g', def=d, use=u, ismove=im}, labelToNodeMap, nodeToPredLabels) = firstPass(fgraph, edgeInfo, succInfo, ~1, instructions)
+                                         fun add_preds_and_sucs((g, n)) = let val succ_labels = case Splaymap.peek(nodeToPredLabels, n) of
                                                                                                  SOME(ls) => ls
                                                                                                | NONE => []
-                                                                          in List.app (fn(l) => mk_edge({from=(g, Splaymap.find(labelToNodeMap, l)), to=(g, n)})) pred_labels
+                                                                          in List.app (fn(l) => mk_edge({to=(g, Splaymap.find(labelToNodeMap, l)), from=(g, n)})) succ_labels
                                                                           end
                                          val _ = List.map add_preds_and_sucs (nodes g')
                                      in (FGRAPH{control=g', def=d, use=u, ismove=im}, nodes g')

@@ -10,8 +10,6 @@ structure tigerliveness :> tigerliveness = struct
 
     (*This function takes a flowgraph and returns a pair of maps (ins, outs), where ins[n] is the set of all temporaries live-in at node n (and similarly, outs[n]) *)
     fun get_liveness_maps(FGRAPH(fgraph)) = let val nodes = tigergraph.nodes(#control fgraph)
-                           val new_ins = Splaymap.mkDict(Int.compare)
-                           val new_outs = Splaymap.mkDict(Int.compare)
                            (* sets_changed is a bool that indicates that (for some node n), the news ins/outs obtained are different from the old ones *)
                            fun fold_algo'((g, n) : node, (ins, outs, keep_iterating)) =
                                let val control = #control fgraph
@@ -32,7 +30,10 @@ structure tigerliveness :> tigerliveness = struct
                                                                  in Splayset.union(set, ins_node) 
                                                                  end
                                    val succ_n = List.map (#2) (tigergraph.succ((g,n)))
+(*                                   val _ = print("Node " ^Int.toString(n) ^", Succs_n: "^ (String.concatWith "," (List.map Int.toString (succ_n)))^ "\n")*)
                                    val outs_n' = List.foldr union_fold (Splayset.empty(String.compare)) succ_n
+                                   (*val _ = Splaymap.app(fn(n, set)=>print("Node " ^Int.toString(n) ^", Outs: "^ (String.concatWith "," (Splayset.listItems set))^ "\n")) outs'*)
+                                   (*val _ = print("Node " ^Int.toString(n) ^", Outs: "^ (String.concatWith "," (Splayset.listItems outs_n'))^ "\n")*)
                                    val ins' = Splaymap.insert(ins, n, ins_n')
                                    val outs' = Splaymap.insert(outs, n, outs_n')
 
@@ -46,13 +47,15 @@ structure tigerliveness :> tigerliveness = struct
                            fun iterate_until_solution(ins, outs) = let val (ins', outs', keep_iterating) = iterate_algo_once(ins, outs)
                                                                    in if keep_iterating then iterate_until_solution(ins', outs') else (ins', outs')
                                                                    end
+                           val new_ins = Splaymap.mkDict(Int.compare)
+                           val new_outs = Splaymap.mkDict(Int.compare)
 
-                        val (final_ins, final_outs) = iterate_until_solution(new_ins, new_outs)
-                        in (final_ins, final_outs) 
+                           val (final_ins, final_outs) = iterate_until_solution(new_ins, new_outs)
+                           in (final_ins, final_outs) 
                         end
 
     fun getLiveMap(fg as FGRAPH(flowgraph)) = let val (ins, outs) = get_liveness_maps(fg)
-                                                  val _ = Splaymap.app(fn(n, set)=>print("Node " ^Int.toString(n) ^", lives: "^ Int.toString(Splayset.numItems(set))^ "\n")) outs
+(*                                                  val _ = Splaymap.app(fn(n, set)=>print("Node " ^Int.toString(n) ^", lives: "^ Int.toString(Splayset.numItems(set))^ "\n")) outs*)
                                                   val nodes = nodes (#control flowgraph)
                                                   fun get_outs_node(n) = Splaymap.find(outs, n)
                                                   val outs_sets = List.map (fn((g, n)) => (n, get_outs_node n)) nodes
@@ -86,7 +89,6 @@ structure tigerliveness :> tigerliveness = struct
                                                          in (IGRAPH({graph=igraph, tnode=tnode, gtemp=gtemp, moves=moves'}), liveMap_fun) end
 
     fun show(IGRAPH(igraph)) = let val ns = nodes (#graph igraph)
-                                   val _ = print(Int.toString(List.length(ns)))
                                    val gtemp = #gtemp igraph
                                    val _ = List.app (fn(n) => print("Temp " ^ gtemp(#2 n) ^", Adjacents: " ^ String.concatWith ";" (List.map (Int.toString o #2) (adj (n))) ^ "\n")) ns
                                in () end

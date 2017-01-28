@@ -105,4 +105,5 @@ tigerassem.uo: tigertemp.ui
 tigerfold.uo: tigertree.ui tigertree.uo
 tigergraph.uo: tigergraph.ui tigertemp.ui
 tigerflowgraph.uo: tigergraph.ui tigergraph.uo tigertemp.ui tigerassem.uo
+tigerliveness.ui: tigerflowgraph.uo
 tigerliveness.uo: tigerliveness.ui tigerflowgraph.uo tigergraph.ui
