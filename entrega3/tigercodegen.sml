@@ -56,7 +56,8 @@ fun codegen frame stm =
                 end
             | munchStm(EXP(CALL(NAME f, args))) = 
                 (saveCallerSaves();
-                 emit(OPER{assem="call "^f, src=munchArgs args, dst=tigerframe.calldefs, jump=NONE});
+                 munchArgs args;
+                 emit(OPER{assem="call "^f, src=[], dst=tigerframe.calldefs, jump=NONE});
                  restoreCallerSaves())
             (* general case for EXP *)
             | munchStm(EXP(e)) = emit(OPER{assem="movl `s0, `d0", src=[munchExp e], dst=[tigertemp.newtemp()], jump=NONE})
@@ -132,7 +133,7 @@ fun codegen frame stm =
                                                 | MEM (CONST x) => (OPER{assem="pushl "^Int.toString x, src=[], dst=[], jump=NONE}, "")
                                                 | MEM (TEMP r) => (OPER{assem="pushl (" ^r ^")", src=[r], dst=[], jump=NONE}, "")
                                                 | e => (OPER{assem="pushl `s0", src=[munchExp e], dst=[], jump=NONE}, "")
-                        in munchArgsST t
+                        in emit instr; munchArgsST t
                         end
             in munchArgsST params
             end

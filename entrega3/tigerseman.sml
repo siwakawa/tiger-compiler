@@ -330,7 +330,8 @@ fun transExp(venv, tenv) =
                  fun get_func_entry(name, params, result) = 
                    let val parent=topLevel()
                        val escapes = map (! o #esc) params
-                       val new_level=newLevel({parent=parent, name=name, formals=escapes})
+                       (* append true to account for the SL *)
+                       val new_level=newLevel({parent=parent, name=name, formals=true::escapes})
                    in (name, Func({level=new_level, label=name, formals=map (#ty) params, result=result, extern=false}))
                    end
                  val sigs = map get_sig fs
@@ -349,10 +350,11 @@ fun transExp(venv, tenv) =
                       val lvl = case fun_ventry of
                                  SOME(Func(x)) => (#level(x))
                                  | _ => error("Internal error 1 (should not happen)", pos)
-                   in map (fn({name=n,escape=e,typ=t}) => (n, transTy(t, pos), e, 3)) ps 
+                   in map (fn({name=n,escape=e,typ=t}) => (n, transTy(t, pos), e, lvl)) ps
                    end
                  fun add_formal_params_to_env(fparams,lvl) = 
-                    foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocArg (topLevel()) (!(#3 param))), level=lvl}), env))) venv_with_funentries fparams
+                    (* allocArg is called always with true because in x86 we always save the args in the stack *)
+                    foldr (fn(param, env) => (tabRInserta(#1 param, Var({ty=(#2 param), access=(allocArg (topLevel()) true), level=lvl}), env))) venv_with_funentries fparams
                  fun check_and_push_function(singleFunctionDec) =
                    let val form_params = get_formal_params(singleFunctionDec)
                        val ({name=name, params=ps, result=r, body=body}, pos) = singleFunctionDec
@@ -368,7 +370,7 @@ fun transExp(venv, tenv) =
                        val venv_with_params = add_formal_params_to_env(form_params,getActualLev())
                        val {exp=bodyexp, ty=bodytype} = transExp(venv_with_params, tenv) body
                        val _ = functionDec(bodyexp, lvl_fun, is_proc)
-                       val _ = popLevel
+                       val _ = popLevel()
                        val _ = postFunctionDec()
                        val _ = if tiposIguales bodytype type_ret then () else error("Function body does not match return type", pos)
                     in ()

@@ -87,7 +87,7 @@ fun Ir(e) =
 	in	aux3 e end
 fun nombreFrame frame = print(".globl " ^ tigerframe.name frame ^ "\n")
 
-(* While y for necesitan la u'ltima etiqueta para un break *)
+(* While y for necesitan la ultima etiqueta para un break *)
 local
 	val salidas: label option tigerpila.Pila = tigerpila.nuevaPila1 NONE
 in
@@ -101,10 +101,8 @@ end
 
 val datosGlobs = ref ([]: frag list)
 fun procEntryExit{level: level, body} =
-	let	val label = STRING(name(#frame level), "")
-		val body' = PROC{frame= #frame level, body=unNx body}
-		val final = STRING(";;-------", "")
-	in	datosGlobs:=(!datosGlobs@[label, body', final]) end
+	let	val body' = PROC{frame= #frame level, body=unNx body}
+	in	datosGlobs:=(!datosGlobs@[body']) end
 fun getResult() = !datosGlobs
 
 fun stringLen s =
@@ -216,7 +214,7 @@ fun callExp (name,external,isproc,lev:level,ls) =
                  | _ => let val t' = newtemp()
                         in preparaArgs t ((TEMP t')::rt, (MOVE(TEMP t', unEx h))::re)
                         end
-        val (ta, ls') = preparaArgs (rev ls) ([],[])
+        val (ta, ls') = preparaArgs (ls) ([],[])
         val ta' = if external then ta else fplev::ta
     in
         if isproc 

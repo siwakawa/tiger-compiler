@@ -35,7 +35,7 @@ val log2WSz = 2				(* base two logarithm of word size in bytes *)
 val fpPrev = 0				(* offset (bytes) *)
 val fpPrevLev = 8			(* offset (bytes) *)
 val argsInicial = 0			(* words *)
-val argsOffInicial = 0		(* words *)
+val argsOffInicial = 1		(* words *)
 val argsGap = wSz			(* bytes *)
 val regInicial = 1			(* reg *)
 val localsInicial = 0		(* words *)
@@ -43,7 +43,8 @@ val localsGap = ~1 (* words *)
 val calldefs = [rv]
 val specialregs = [rv, fp, sp]
 val argregs = []
-val callersaves = [rv, ecx, ov]
+(*How to restore %eax without overwriting the return value? *)
+val callersaves = [ecx, ov]
 val calleesaves = [fp, ebx, edi, esi]
 
 type frame = {
