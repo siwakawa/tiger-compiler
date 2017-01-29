@@ -43,8 +43,7 @@ val localsGap = ~1 (* words *)
 val calldefs = [rv]
 val specialregs = [rv, fp, sp]
 val argregs = []
-(*How to restore %eax without overwriting the return value? *)
-val callersaves = [ecx, ov]
+val callersaves = [rv, ecx, ov]
 val calleesaves = [fp, ebx, edi, esi]
 
 type frame = {

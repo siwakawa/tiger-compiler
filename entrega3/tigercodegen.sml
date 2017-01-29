@@ -55,10 +55,11 @@ fun codegen frame stm =
                    emit(OPER{assem="movl `s0, `d0", dst=[munchExp e1], src=[t], jump=NONE})
                 end
             | munchStm(EXP(CALL(NAME f, args))) = 
-                (saveCallerSaves();
-                 munchArgs args;
-                 emit(OPER{assem="call "^f, src=[], dst=tigerframe.calldefs, jump=NONE});
-                 restoreCallerSaves())
+               (* We don't save the caller saves, we just put them in dst so the register allocator will know they can be overwritten inside the call *)
+               (* (saveCallerSaves(); *)
+                 (munchArgs args;
+                 emit(OPER{assem="call "^f, src=[], dst=tigerframe.callersaves, jump=NONE}))
+               (* restoreCallerSaves()) *)
             (* general case for EXP *)
             | munchStm(EXP(e)) = emit(OPER{assem="movl `s0, `d0", src=[munchExp e], dst=[tigertemp.newtemp()], jump=NONE})
 
