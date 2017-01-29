@@ -33,7 +33,7 @@ structure tigerliveness :> tigerliveness = struct
 (*                                   val _ = print("Node " ^Int.toString(n) ^", Succs_n: "^ (String.concatWith "," (List.map Int.toString (succ_n)))^ "\n")*)
                                    val outs_n' = List.foldr union_fold (Splayset.empty(String.compare)) succ_n
                                    (*val _ = Splaymap.app(fn(n, set)=>print("Node " ^Int.toString(n) ^", Outs: "^ (String.concatWith "," (Splayset.listItems set))^ "\n")) outs'*)
-                                   (*val _ = print("Node " ^Int.toString(n) ^", Outs: "^ (String.concatWith "," (Splayset.listItems outs_n'))^ "\n")*)
+(*                                   val _ = print("Node " ^Int.toString(n) ^", Outs: "^ (String.concatWith "," (Splayset.listItems outs_n'))^ "\n")*)
                                    val ins' = Splaymap.insert(ins, n, ins_n')
                                    val outs' = Splaymap.insert(outs, n, outs_n')
 
@@ -65,9 +65,17 @@ structure tigerliveness :> tigerliveness = struct
 
     fun interferenceGraph(fg as FGRAPH(flowgraph)) = let val liveMap = getLiveMap fg
 (*                                                         val _ = Splaymap.app(fn(n, set)=>print("Node " ^Int.toString(n) ^", lives: "^ Int.toString(Splayset.numItems(set))^ "\n")) liveMap*)
+                                                         val controlfg = #control flowgraph
+                                                         val fg_nodes = nodes controlfg
+                                                         fun ismove(n) = Splaymap.find(#ismove flowgraph, n)
+                                                         fun getdefs(n) = Splaymap.find(#def flowgraph, n)
+                                                         fun getuses(n) = Splaymap.find(#use flowgraph, n)
                                                          val emptyIGraph = newGraph()
                                                          val emptyMap = Splaymap.mkDict(Int.compare)
-                                                         val temps_set = Splaymap.foldr (fn(n, outs_n_set, all_outs_set) => Splayset.union(all_outs_set, outs_n_set)) (Splayset.empty(String.compare)) liveMap
+
+                                                         val temps_list  = List.concat (List.map (fn((g,n)) => getdefs(n)@getuses(n)) fg_nodes)
+                                                         val temps_set = List.foldr (fn(t, set) => Splayset.add(set, t)) (Splayset.empty(String.compare)) temps_list
+(*                                                         val _ = Splayset.app(fn(t) => print(t ^", ")) temps_set*)
                                                          val (igraph, list_nodesxtemps) = Splayset.foldr (fn(t,(g, pairs_node_temp)) => let val (g', n) = newNode g
                                                                                                                                         in (g', (n, t)::pairs_node_temp) end) (emptyIGraph, []) temps_set
                                                          val tnode_dict = List.foldr (fn((n, t), map)=>Splaymap.insert(map, t, n))(Splaymap.mkDict(String.compare)) list_nodesxtemps
@@ -75,22 +83,33 @@ structure tigerliveness :> tigerliveness = struct
                                                          val tnode = fn(t) => Splaymap.find(tnode_dict, t)
                                                          val gtemp = fn(n) => Splaymap.find(gtemp_dict, n)
 
-                                                         fun ismove(n) = Splaymap.find(#ismove flowgraph, n)
-                                                         fun getdefs(n) = Splaymap.find(#def flowgraph, n)
-                                                         fun getuses(n) = Splaymap.find(#use flowgraph, n)
+
                                                          val moves = List.map (fn((g, fg_node)) => if ismove(fg_node) then
                                                                                                 (if (length(getdefs(fg_node)) <> 1) orelse (length(getuses(fg_node)) <> 1) then
                                                                                                      raise Fail "Internal error: Move instruction with #uses/=1 or #defs /=1"
                                                                                                 else [(hd(getdefs(fg_node)), hd(getuses(fg_node)))])
-                                                                                              else []) (nodes (#control flowgraph))
+                                                                                              else []) fg_nodes
                                                          val moves' = List.concat moves
                                                          fun liveMap_fun(fg_node) = Splaymap.find(liveMap, fg_node)
-                                                        (*Faltan agregar las aristas al igraph*) 
+
+                                                         (* Use liveMap and defs information to add the edges to the interference graph*)
+                                                         fun addIntEdges((fg, fg_node)) = let val defs = getdefs(fg_node)
+                                                                                        val uses = getuses(fg_node)
+                                                                                        val lives = liveMap_fun(fg_node)
+                                                                                        val lives_converted = Splayset.listItems lives
+                                                                                        (* Reflexive edges are not added, and MOVE instructions are treated differently *)
+                                                                                        fun should_add_edge(d, l) = d <> l andalso (if ismove(fg_node) then (l <> hd(uses)) else true)
+                                                                                        fun add_int_edge(d) = List.app (fn(l) => if should_add_edge(d, l) then mk_edge{from=(igraph, tnode d),to=(igraph, tnode l)} else ()) lives_converted
+                                                                                    in List.app add_int_edge defs 
+                                                                                    end
+                                                         val _ = List.map addIntEdges fg_nodes 
+
+
                                                          in (IGRAPH({graph=igraph, tnode=tnode, gtemp=gtemp, moves=moves'}), liveMap_fun) end
 
     fun show(IGRAPH(igraph)) = let val ns = nodes (#graph igraph)
                                    val gtemp = #gtemp igraph
-                                   val _ = List.app (fn(n) => print("Temp " ^ gtemp(#2 n) ^", Adjacents: " ^ String.concatWith ";" (List.map (Int.toString o #2) (adj (n))) ^ "\n")) ns
+                                   val _ = List.app (fn(n) => print("Temp " ^ gtemp(#2 n) ^", Adjacents: " ^ String.concatWith ";" (List.map (gtemp o #2) (adj (n))) ^ "\n")) ns
                                in () end
 
 

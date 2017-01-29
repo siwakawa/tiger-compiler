@@ -127,7 +127,7 @@ fun codegen frame stm =
             let fun munchArgsST [] = []
                     | munchArgsST (h::t) = 
                         let val (instr, e) = case h of
-                                                CONST i => (OPER{assem="pushl" ^Int.toString i, src=[], dst=[], jump=NONE}, "")
+                                                CONST i => (OPER{assem="pushl $" ^Int.toString i, src=[], dst=[], jump=NONE}, "")
                                                 | NAME n => (OPER{assem="pushl $" ^n, src=[], dst=[], jump=NONE}, "")
                                                 | TEMP t => (OPER{assem="pushl " ^t, src=[t], dst=[], jump=NONE}, "")
                                                 | MEM (CONST x) => (OPER{assem="pushl "^Int.toString x, src=[], dst=[], jump=NONE}, "")
