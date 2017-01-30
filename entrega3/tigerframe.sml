@@ -30,6 +30,7 @@ val ecx = "%ecx"               (* counter (ecx in 386) *)
 val esi = "%esi"               (* source index for string operations (esi in 386) *)
 val edi = "%edi"               (* destination index for string operations (esi in 386) *)
 val eip = "%eip"               (* instruction pointer (eip in 386) *)
+val list_regs = [fp, sp, rv, ov, ebx, ecx, esi, edi, eip]
 val wSz = 4					(* word size in bytes *)
 val log2WSz = 2				(* base two logarithm of word size in bytes *)
 val fpPrev = 0				(* offset (bytes) *)

@@ -6,6 +6,7 @@ type register = string
 val rv : tigertemp.temp
 val ov : tigertemp.temp
 val fp : tigertemp.temp
+val list_regs : tigertemp.temp list
 datatype access = InFrame of int | InReg of tigertemp.label
 val fpPrev : int
 val fpPrevLev : int
