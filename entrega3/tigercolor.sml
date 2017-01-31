@@ -14,6 +14,8 @@ struct
     val selectStack = ref [](* : (ref (tigertemp.temp list))*)
 
     val moveList = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, int Splayset.set) Splaymap.dict ref
+    val coalescedMoves = ref (Splayset.empty(Int.compare))
+    val constrainedMoves = ref (Splayset.empty(Int.compare))
     val worklistMoves = ref (Splayset.empty(Int.compare))
     val activeMoves = ref (Splayset.empty(Int.compare))
     fun edgeOrder((from1,to1),(from2,to2)) = if from1=from2 then String.compare(to1,to2) else String.compare(from1,from2)
@@ -166,6 +168,39 @@ struct
         (* forall m in Adjacent(n): DecrementDegree(m) *)
         in Splayset.app (fn(m) => decrementDegree(m, getMoves)) (adjacent(n))
         end
+
+
+    fun addWorkList(u) = () 
+
+    fun ok(t, r) = true
+
+    fun conservative(nodes) = true
+
+    fun combine(u,v) = ()
+    
+    fun coalesce(fnodeToIns) = let
+        val m  = List.hd(Splayset.listItems(!worklistMoves))
+        val singleton_m = Splayset.singleton Int.compare m
+        val (x, y) = case Splaymap.find(fnodeToIns, m) of
+          MOVE{assem=_, dst=y, src=x} => (x,y)
+          | _ => raise Fail "Internal error coalescing: node in worklistMoves not a MOVE"
+        val (u, v) = if Splayset.member(!precolored, y) then (y,x) else (x,y)
+        val _ = worklistMoves := Splayset.difference(!worklistMoves, singleton_m)
+        val _ = if (u=v) then (coalescedMoves := Splayset.union(!coalescedMoves, singleton_m);
+                               addWorkList(u))
+                else (if (Splayset.member(!precolored, v) orelse Splayset.member(!adjSet, (u,v)))
+                      then (constrainedMoves := Splayset.union(!constrainedMoves, singleton_m);
+                           addWorkList(u);
+                           addWorkList(v))
+                      else (if (Splayset.member(!precolored, u) andalso (List.all ok (List.map (fn(t) => (t,u)) (Splayset.listItems(adjacent(v))))))
+                               orelse (not (Splayset.member(!precolored, u)) andalso conservative(Splayset.union(adjacent(u), adjacent(v))))
+                            then (coalescedMoves := Splayset.union(!coalescedMoves, singleton_m); 
+                                  combine(u,v);
+                                  addWorkList(u))
+                            else
+                                activeMoves := Splayset.union(!activeMoves, singleton_m)))
+                         
+        in () end
 
 end
 
