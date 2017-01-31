@@ -1,12 +1,14 @@
 structure tigerliveness :> tigerliveness = struct
     open tigergraph                                                                 
     open tigerflowgraph
-
     datatype igraph = 
         IGRAPH of {graph: tigergraph.graph,
                    tnode: tigertemp.temp -> tigergraph.node',
                    gtemp: tigergraph.node' -> tigertemp.temp,
-                   moves: (tigertemp.temp * tigertemp.temp) list}
+                   moves: (tigertemp.temp * tigertemp.temp) list,
+                   (* For each node in the interference graph (a temp), get the nodes in the flowgraph which are the moves related to that temp *)
+                   getMoves: tigergraph.node' -> tigergraph.node' Splayset.set}
+ 
 
     (*This function takes a flowgraph and returns a pair of maps (ins, outs), where ins[n] is the set of all temporaries live-in at node n (and similarly, outs[n]) *)
     fun get_liveness_maps(FGRAPH(fgraph)) = let val nodes = tigergraph.nodes(#control fgraph)
@@ -90,6 +92,16 @@ structure tigerliveness :> tigerliveness = struct
                                                                                                 else [(hd(getdefs(fg_node)), hd(getuses(fg_node)))])
                                                                                               else []) fg_nodes
                                                          val moves' = List.concat moves
+
+                                                         (*moveList contains pairs (node_temp, node_move) mapping each temp to a move instruction, both in graph nodes*)
+                                                         val moveList = List.map (fn((g, fg_node)) => if ismove(fg_node) then
+                                                                                                (if (length(getdefs(fg_node)) <> 1) orelse (length(getuses(fg_node)) <> 1) then
+                                                                                                     raise Fail "Internal error: Move instruction with #uses/=1 or #defs /=1"
+                                                                                                else [(tnode(hd(getdefs(fg_node))), fg_node), (tnode(hd(getuses(fg_node))), fg_node)])
+                                                                                              else []) fg_nodes
+                                                         val moveList' = List.concat moveList
+                                                         fun moveListFun(temp_node) = Splayset.addList(Splayset.empty(Int.compare), List.map (#2) (List.filter (fn(t, m) => temp_node=m) moveList'))
+
                                                          fun liveMap_fun(fg_node) = Splaymap.find(liveMap, fg_node)
 
                                                          (* Use liveMap and defs information to add the edges to the interference graph*)
@@ -105,7 +117,7 @@ structure tigerliveness :> tigerliveness = struct
                                                          val _ = List.map addIntEdges fg_nodes 
 
 
-                                                         in (IGRAPH({graph=igraph, tnode=tnode, gtemp=gtemp, moves=moves'}), liveMap_fun) end
+                                                         in (IGRAPH({graph=igraph, tnode=tnode, gtemp=gtemp, moves=moves', getMoves=moveListFun}), liveMap_fun) end
 
     fun show(IGRAPH(igraph)) = let val ns = nodes (#graph igraph)
                                    val gtemp = #gtemp igraph

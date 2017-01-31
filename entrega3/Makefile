@@ -107,4 +107,4 @@ tigergraph.uo: tigergraph.ui tigertemp.ui
 tigerflowgraph.uo: tigergraph.ui tigergraph.uo tigertemp.ui tigerassem.uo
 tigerliveness.ui: tigerflowgraph.uo
 tigerliveness.uo: tigerliveness.ui tigerflowgraph.uo tigergraph.ui
-tigercolor.uo: tigerflowgraph.uo tigerliveness.ui
+tigercolor.uo: tigerflowgraph.uo tigerliveness.ui tigerliveness.uo tigergraph.ui
