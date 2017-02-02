@@ -4,6 +4,7 @@ struct
     open tigergraph
     open tigerflowgraph
     open tigerliveness
+    open tigerframe
     
     val K = List.length(tigerframe.list_regs)
     val precolored = ref (Splayset.addList(Splayset.empty(String.compare), tigerframe.list_regs))
@@ -269,7 +270,57 @@ struct
                   in assignColors()  end)
       in () end
 
-    fun rewriteProgram() = ()
+    fun rewriteProgram(frame) = let
+        fun allocNodesFold(n, map) = Splaymap.insert(map, n, allocLocal frame true)
+        val allocatedNodes = Splayset.foldr allocNodesFold (Splaymap.mkDict(String.compare)) (!spilledNodes)
+        fun replaceTemp(old, new, ls) = List.map (fn(x) => if x=old then new else x) ls
+        fun processInstr(ins as OPER{assem=a, dst=ds, src=ss, jump=j}) = let
+            fun processDef(d) = let
+                val newTemp = tigertemp.newtemp()
+                val stackPos = case Splaymap.find(allocatedNodes, d) of
+                    InFrame s => s
+                    | _ => raise Fail "Internal error, allocated spilled node as register"
+                val (prev, middle, post) = if Splayset.member(!spilledNodes, d)
+                             then ([OPER{assem=a, dst=replaceTemp(d, newTemp, ds), src=ss, jump=j}], OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}, [])
+                             else ([], ins, [])
+                in () end
+            fun processUse(u) = let
+                val newTemp = tigertemp.newtemp()
+                val stackPos = case Splaymap.find(allocatedNodes, u) of
+                    InFrame s => s
+                    | _ => raise Fail "Internal error, allocated spilled node as register"
+                val (prev, middle, post) = if Splayset.member(!spilledNodes, u)
+                             then ([], OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}, [OPER{assem=a, dst=ds, src=replaceTemp(u, newTemp, ss), jump=j}])
+                             else ([], ins, [])
+                in () end
+        in () end
+
+        | processInstr(ins as MOVE{assem=a, dst=dest, src=src}) = let
+            fun processDef(d) = let
+                val newTemp = tigertemp.newtemp()
+                val stackPos = case Splaymap.find(allocatedNodes, d) of
+                    InFrame s => s
+                    | _ => raise Fail "Internal error, allocated spilled node as register"
+                val (prev, middle, post) = if Splayset.member(!spilledNodes, d)
+                             then ([MOVE{assem=a, dst=newTemp, src=src}], OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}, [])
+                             else ([], ins, [])
+                in () end
+            fun processUse(u) = let
+                val newTemp = tigertemp.newtemp()
+                val stackPos = case Splaymap.find(allocatedNodes, u) of
+                    InFrame s => s
+                    | _ => raise Fail "Internal error, allocated spilled node as register"
+                val (prev, middle, post) = if Splayset.member(!spilledNodes, u)
+                             then ([], OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}, [MOVE{assem=a, dst=dest, src=newTemp}])
+                             else ([], ins, [])
+                in () end
+
+        in () end
+
+        | processInstr(x) = ()
+
+    in () end
+            
 
 end
 
