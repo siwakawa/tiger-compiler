@@ -89,7 +89,7 @@ tigertopsort.uo: tigertopsort.ui tigertab.ui tigertips.uo tigerabs.uo
 tigerpp.uo: tigerabs.uo 
 tigermain.uo: tigerseman.ui tigerescap.ui tigergrm.ui tigerframe.ui \
     tigerit.uo tigercanon.ui tigerinterp.ui tigerlex.uo tigertrans.ui \
-    tigerpp.uo tigercodegen.ui tigerfold.uo tigerflowgraph.uo tigerliveness.ui
+    tigerpp.uo tigercodegen.ui tigerfold.uo tigerflowgraph.uo tigerliveness.ui tigercolor.uo
 tigertab.uo: tigertab.ui 
 tigergrm.ui: tigerabs.uo 
 tigerescap.uo: tigerescap.ui tigertab.ui tigerabs.uo 

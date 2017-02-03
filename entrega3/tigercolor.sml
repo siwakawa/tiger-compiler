@@ -8,6 +8,7 @@ struct
     
     val K = List.length(tigerframe.list_regs)
     val precolored = ref (Splayset.addList(Splayset.empty(String.compare), tigerframe.list_regs))
+    val initial = ref (Splayset.empty(String.compare))
     val spillWorklist = ref (Splayset.empty(String.compare))
     val spilledNodes = ref (Splayset.empty(String.compare))
     val coalescedNodes = ref (Splayset.empty(String.compare))
@@ -59,22 +60,30 @@ struct
                      
                       
     
-    fun build((flowgraph, nodeToIns), (intgraph, liveMap), moveList, worklistMoves) =
+    fun build((flowgraph, nodeToIns), (intgraph, liveMap)) =
         let val FGRAPH({control, def, use, ismove}) = flowgraph
             val IGRAPH{graph=ig, gtemp=nodeToTemp, moves=getMovesFun, tnode=tempToNode} = intgraph
+            val initial_ls = List.map (nodeToTemp o #2) (nodes ig)
+            val _ = initial := Splayset.addList(Splayset.empty(String.compare), initial_ls)
             val _ = getMoves := getMovesFun
             val instructions = List.rev(nodes control)
             fun isMoveInstruction(n) = Splaymap.find(ismove,n)
-            fun processInstruction(instr) = 
+            fun getInstrMove(MOVE{dst=d,src=s,...}) = [(s, d)]
+               |getInstrMove(OPER{dst=ds,src=ss,...}) = List.concat (List.map (fn(s) => List.map (fn(d) => (d, s)) ds) ss)
+               |getInstrMove(_) = []
+
+            fun processInstruction((g, instr)) = 
                 let val live = ref (liveMap(instr))
                     val use_i = Splayset.addList(Splayset.empty(String.compare), Splaymap.find(use, instr))
                     val def_i = Splayset.addList(Splayset.empty(String.compare), Splaymap.find(def, instr))
                     val singleton_i = (Splayset.singleton Int.compare instr)
-                    
+                    val real_ins = Splaymap.find(nodeToIns, instr)
+                    val moves_ins = getInstrMove(real_ins)
+                    val moves_ins_set = Splayset.addList(Splayset.empty(moveOrder), moves_ins)
                     val _ = if isMoveInstruction(instr) then 
                         (live := Splayset.difference(!live, use_i);
                          Splayset.app (fn(n) => moveList := Splaymap.insert(!moveList, n, Splayset.union(Splaymap.find(!moveList, n), singleton_i))) (Splayset.union(use_i, def_i));
-                         worklistMoves := Splayset.union(!worklistMoves, singleton_i); ())
+                         worklistMoves := Splayset.union(!worklistMoves, moves_ins_set); ())
                             else ()
                     val _ = live := Splayset.union(!live, def_i)
                     val _ = Splayset.app (fn(d) => Splayset.app (fn(l) => addEdge(l, d)) (!live) ) def_i
@@ -83,7 +92,7 @@ struct
                 end
             
 
-        in ()
+        in List.map processInstruction instructions
         end
 
     fun nodeMoves(n) = let
@@ -93,10 +102,8 @@ struct
 
     fun moveRelated(n) = not (Splayset.isEmpty(nodeMoves(n)))
 
-    fun makeWorklist(IGRAPH{graph=ig, gtemp=nodeToTemp,...}) = 
-        let val initial_ls = List.map (nodeToTemp o #2) (nodes ig)
-            val initial = ref (Splayset.addList(Splayset.empty(String.compare), initial_ls))
-            fun process(t) =
+    fun makeWorklist() = 
+         let fun process(t) =
                 let val singleton_t = Splayset.singleton String.compare t
                     val _ = initial := Splayset.difference(!initial, singleton_t)
                     val degree_t = Splaymap.find(!degree, t)
@@ -192,13 +199,11 @@ struct
       in () end
 
     
-    fun coalesce(fnodeToIns) = let
-        val m  = List.hd(Splayset.listItems(!worklistMoves))
+    fun coalesce() = let
+        val m as (x, y) = List.hd(Splayset.listItems(!worklistMoves))
         val singleton_m = Splayset.singleton moveOrder m
-        val (x, y) = case Splaymap.find(fnodeToIns, m) of
-          MOVE{assem=_, dst=y, src=x} => (getAlias x, getAlias y)
-          | _ => raise Fail "Internal error coalescing: node in worklistMoves not a MOVE"
-        val (u, v) = if Splayset.member(!precolored, y) then (y,x) else (x,y)
+        val (x', y') = (getAlias(x), getAlias(y))
+        val (u, v) = if Splayset.member(!precolored, y) then (y',x') else (x',y')
         val _ = worklistMoves := Splayset.difference(!worklistMoves, singleton_m)
         val _ = if (u=v) then (coalescedMoves := Splayset.union(!coalescedMoves, singleton_m);
                                addWorkList(u))
@@ -270,58 +275,89 @@ struct
                   in assignColors()  end)
       in () end
 
-    fun rewriteProgram(frame) = let
+    fun rewriteProgram(frame, instructions) = let
         fun allocNodesFold(n, map) = Splaymap.insert(map, n, allocLocal frame true)
         val allocatedNodes = Splayset.foldr allocNodesFold (Splaymap.mkDict(String.compare)) (!spilledNodes)
         fun replaceTemp(old, new, ls) = List.map (fn(x) => if x=old then new else x) ls
+        val newTemps = ref (Splayset.empty(String.compare))
         fun processInstr(ins as OPER{assem=a, dst=ds, src=ss, jump=j}) = let
-            fun processDef(d) = let
+            fun processDef(d, (prevs, posts, uses, defs)) = let
                 val newTemp = tigertemp.newtemp()
+                val _ = newTemps := Splayset.add(!newTemps, newTemp)
                 val stackPos = case Splaymap.find(allocatedNodes, d) of
                     InFrame s => s
                     | _ => raise Fail "Internal error, allocated spilled node as register"
-                val (prev, middle, post) = if Splayset.member(!spilledNodes, d)
-                             then ([OPER{assem=a, dst=replaceTemp(d, newTemp, ds), src=ss, jump=j}], OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}, [])
-                             else ([], ins, [])
-                in () end
-            fun processUse(u) = let
+                val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, d)
+                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp]) 
+                             else ([], [], [], [d])
+                in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
+            fun processUse(u, (prevs, posts, uses, defs)) = let
                 val newTemp = tigertemp.newtemp()
+                val _ = newTemps := Splayset.add(!newTemps, newTemp)
                 val stackPos = case Splaymap.find(allocatedNodes, u) of
                     InFrame s => s
                     | _ => raise Fail "Internal error, allocated spilled node as register"
-                val (prev, middle, post) = if Splayset.member(!spilledNodes, u)
-                             then ([], OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}, [OPER{assem=a, dst=ds, src=replaceTemp(u, newTemp, ss), jump=j}])
-                             else ([], ins, [])
-                in () end
-        in () end
+                val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, u)
+                             then ([OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}], [], [newTemp], [])
+                             else ([], [], [u], [])
+                in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
+            val (prev, post, newUses, newDefs) = List.foldr processDef ([], [], [], []) ds
+            val (prev', post', newUses', newDefs') = List.foldr processUse ([], [], [], []) ss 
+            val newIns = OPER{assem=a, dst=newDefs', src=newUses', jump=j}
+        in prev'@[newIns]@post' end
 
         | processInstr(ins as MOVE{assem=a, dst=dest, src=src}) = let
-            fun processDef(d) = let
+            fun processDef(d, (prevs, posts, uses, defs)) = let
                 val newTemp = tigertemp.newtemp()
+                val _ = newTemps := Splayset.add(!newTemps, newTemp)
                 val stackPos = case Splaymap.find(allocatedNodes, d) of
                     InFrame s => s
                     | _ => raise Fail "Internal error, allocated spilled node as register"
-                val (prev, middle, post) = if Splayset.member(!spilledNodes, d)
-                             then ([MOVE{assem=a, dst=newTemp, src=src}], OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}, [])
-                             else ([], ins, [])
-                in () end
-            fun processUse(u) = let
+                val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, d)
+                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp])
+                             else ([], [], [], [d])
+                in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
+            fun processUse(u, (prevs, posts, uses, defs)) = let
                 val newTemp = tigertemp.newtemp()
+                val _ = newTemps := Splayset.add(!newTemps, newTemp)
                 val stackPos = case Splaymap.find(allocatedNodes, u) of
                     InFrame s => s
                     | _ => raise Fail "Internal error, allocated spilled node as register"
-                val (prev, middle, post) = if Splayset.member(!spilledNodes, u)
-                             then ([], OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}, [MOVE{assem=a, dst=dest, src=newTemp}])
-                             else ([], ins, [])
-                in () end
+                val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, u)
+                             then ([OPER{assem="movl "^ Int.toString stackPos^ "(`s0) `d0", src=[fp], dst=[newTemp], jump=NONE}], [], [newTemp], [])
+                             else ([], [], [u], [])
+                in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
+            val (prev, post, newUses, newDefs) = processDef(dest, ([], [], [], []))
+            val (prev', post', newUses', newDefs') = processUse (src, ([], [], [], []))
+            val newIns = MOVE{assem=a, dst=hd(newDefs'), src=hd(newUses')}
+        in prev'@[newIns]@post' end
 
+
+        | processInstr(x) = [x]
+
+        val newIns = List.concat (List.map processInstr instructions)
+        val _ = spilledNodes := Splayset.empty(String.compare)
+        val _ = initial := Splayset.union(Splayset.union(!coloredNodes, !coalescedNodes), !newTemps)
+        val _ = coloredNodes := Splayset.empty(String.compare)
+        val _ = coalescedNodes := Splayset.empty(String.compare)
         in () end
-
-        | processInstr(x) = ()
-
-    in () end
             
 
+    fun main((flowgraph, nodeToIns), (intgraph, liveMap)) = let
+        val _ = build((flowgraph,nodeToIns), (intgraph, liveMap))
+        val _ = makeWorklist()
+        fun aux() = let
+            val _ = if not (Splayset.isEmpty(!simplifyWorklist))
+                    then simplify() 
+                    else if not (Splayset.isEmpty(!worklistMoves))
+                         then coalesce()
+                         else if not (Splayset.isEmpty(!freezeWorklist))
+                              then freeze()
+                              else if not (Splayset.isEmpty(!spillWorklist))
+                                   then selectSpill()
+                                   else ()
+             in () end
+         in () end
 end
 
 

@@ -87,8 +87,10 @@ fun main(args) =
        val _ = if flow then print_fgraph(fgraph) else ()
 
        val igraph = List.map (tigerliveness.interferenceGraph o #1) fgraph
-
+       
        val _ = if live then List.app (tigerliveness.show o #1) igraph else ()
+
+       val _ = ListPair.map tigercolor.main (fgraph, igraph)
 
 	in
 		print "yes!!\n"
