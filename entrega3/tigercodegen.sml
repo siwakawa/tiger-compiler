@@ -36,6 +36,10 @@ fun codegen frame stm =
                 emit(OPER{assem="movl "^Int.toString(i)^ "(`s0), `d0", dst=[t1], src=[t2], jump=NONE})
             | munchStm(MOVE(TEMP t1, MEM(BINOP(PLUS, TEMP t2, CONST i)))) = 
                 emit(OPER{assem="movl "^Int.toString(i)^ "(`s0), `d0",  dst=[t1], src=[t2], jump=NONE})
+            | munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), TEMP t1)) = 
+                emit(OPER{assem="movl `s0, "^(Int.toString i)^"(`s1)",  dst=[], src=[t1, t2], jump=NONE})
+            | munchStm(MOVE(MEM(BINOP(PLUS, CONST i, TEMP t2)), TEMP t1)) = 
+                emit(OPER{assem="movl `s0, "^(Int.toString i)^"(`s1)",  dst=[], src=[t1, t2], jump=NONE})
             | munchStm(MOVE(MEM e1, MEM e2)) =  
                 let val t = tigertemp.newtemp() 
                 in emit(OPER{assem="movl (`s0), `d0", dst=[t], src=[munchExp e2], jump=NONE});
