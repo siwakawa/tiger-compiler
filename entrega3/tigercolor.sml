@@ -5,8 +5,11 @@ struct
     open tigerflowgraph
     open tigerliveness
     open tigerframe
+
+    val emptyStringSet = Splayset.empty(String.compare)
+    val emptyIntSet = Splayset.empty(Int.compare)
     
-    val K = List.length(tigerframe.list_regs)
+    val K = List.length(tigerframe.usable_regs)
     val precolored = ref (Splayset.addList(Splayset.empty(String.compare), tigerframe.list_regs))
     val initial = ref (Splayset.empty(String.compare))
     val spillWorklist = ref (Splayset.empty(String.compare))
@@ -22,6 +25,9 @@ struct
     val getMoves = ref (fn(x) => Splayset.empty(moveOrder))
     val alias = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, tigertemp.temp) Splaymap.dict ref
     val color = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, int) Splaymap.dict ref
+    val _ = List.app (fn(n) => color := Splaymap.insert(!color, List.nth(tigerframe.usable_regs, n), n)) (List.tabulate(K, (fn(x) => x)))
+    val _ = List.app (fn(n) => color := Splaymap.insert(!color, List.nth(tigerframe.non_usable_regs, n), n+K)) (List.tabulate(List.length(non_usable_regs), (fn(x) => x)))
+(*    val _ = List.app (fn(map) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) [!color] *)
     val coalescedMoves = ref (Splayset.empty(moveOrder))
     val constrainedMoves = ref (Splayset.empty(moveOrder))
     val frozenMoves = ref (Splayset.empty(moveOrder))
@@ -40,10 +46,10 @@ struct
         val _ = if Splayset.member(!adjSet, (u,v)) orelse u=v then ()
                 else
                     let val _ = adjSet := Splayset.addList(!adjSet, [(u,v),(v,u)])
-                        val adjList_u = Splaymap.find(!adjList, u)
-                        val adjList_v = Splaymap.find(!adjList, v)
-                        val degree_u = Splaymap.find(!degree, u)
-                        val degree_v = Splaymap.find(!degree, v)
+                        val adjList_u = case Splaymap.peek(!adjList, u) of SOME(x) => x | NONE => emptyStringSet
+                        val adjList_v = case Splaymap.peek(!adjList, v) of SOME(x) => x | NONE => emptyStringSet
+                        val degree_u = case Splaymap.peek(!degree, u) of SOME(x) => x | NONE => 0
+                        val degree_v = case Splaymap.peek(!degree, v) of SOME(x) => x | NONE => 0
                         val singleton_v = Splayset.singleton String.compare v
                         val singleton_u = Splayset.singleton String.compare u
                         val _ = if (not (Splayset.member(!precolored, u))) then
@@ -55,7 +61,7 @@ struct
                                    degree := Splaymap.insert(!degree, v, degree_v + 1))
                                  else ()
                     in () end
-        in () end
+        in () end 
 
                      
                       
@@ -65,31 +71,35 @@ struct
             val IGRAPH{graph=ig, gtemp=nodeToTemp, moves=getMovesFun, tnode=tempToNode} = intgraph
             val initial_ls = List.map (nodeToTemp o #2) (nodes ig)
             val _ = initial := Splayset.addList(Splayset.empty(String.compare), initial_ls)
+            val _ = initial := Splayset.difference(!initial, !precolored)
             val _ = getMoves := getMovesFun
             val instructions = List.rev(nodes control)
-            fun isMoveInstruction(n) = Splaymap.find(ismove,n)
+            fun isMoveInstruction(n) = Splaymap.find(ismove,n) 
             fun getInstrMove(MOVE{dst=d,src=s,...}) = [(s, d)]
                |getInstrMove(OPER{dst=ds,src=ss,...}) = List.concat (List.map (fn(s) => List.map (fn(d) => (d, s)) ds) ss)
                |getInstrMove(_) = []
 
             fun processInstruction((g, instr)) = 
                 let val live = ref (liveMap(instr))
-                    val use_i = Splayset.addList(Splayset.empty(String.compare), Splaymap.find(use, instr))
+                    val use_i = Splayset.addList(Splayset.empty(String.compare), Splaymap.find(use, instr))  
                     val def_i = Splayset.addList(Splayset.empty(String.compare), Splaymap.find(def, instr))
                     val singleton_i = (Splayset.singleton Int.compare instr)
                     val real_ins = Splaymap.find(nodeToIns, instr)
-                    val moves_ins = getInstrMove(real_ins)
+                    val moves_ins = getInstrMove(real_ins) 
                     val moves_ins_set = Splayset.addList(Splayset.empty(moveOrder), moves_ins)
-                    val _ = if isMoveInstruction(instr) then 
-                        (live := Splayset.difference(!live, use_i);
-                         Splayset.app (fn(n) => moveList := Splaymap.insert(!moveList, n, Splayset.union(Splaymap.find(!moveList, n), singleton_i))) (Splayset.union(use_i, def_i));
-                         worklistMoves := Splayset.union(!worklistMoves, moves_ins_set); ())
+                    val _ = if isMoveInstruction(instr) 
+                            then (let
+                               val _ = live := Splayset.difference(!live, use_i)
+                               fun getMoveList(n) = case Splaymap.peek(!moveList, n) of SOME(x) => x | NONE => emptyIntSet
+                               val _ = Splayset.app (fn(n) => moveList := Splaymap.insert(!moveList, n, Splayset.union(getMoveList(n), singleton_i))) (Splayset.union(use_i, def_i))
+                               val _ = worklistMoves := Splayset.union(!worklistMoves, moves_ins_set)
+                              in () end)
                             else ()
                     val _ = live := Splayset.union(!live, def_i)
-                    val _ = Splayset.app (fn(d) => Splayset.app (fn(l) => addEdge(l, d)) (!live) ) def_i
+                    val _ = Splayset.app (fn(d) => Splayset.app (fn(l) => addEdge(l, d)) (!live) ) def_i 
                     (* not necessary since we already have the liveMap *)
                 in ()
-                end
+                end 
             
 
         in List.map processInstruction instructions
@@ -106,7 +116,7 @@ struct
          let fun process(t) =
                 let val singleton_t = Splayset.singleton String.compare t
                     val _ = initial := Splayset.difference(!initial, singleton_t)
-                    val degree_t = Splaymap.find(!degree, t)
+                    val degree_t = case Splaymap.peek(!degree, t) of SOME(x) => x | NONE => 0
                     val set_to_modify = if degree_t >= K then spillWorklist else (if moveRelated(t) then freezeWorklist else simplifyWorklist)
                     val _ = set_to_modify := Splayset.union(!set_to_modify, singleton_t)
 
@@ -115,7 +125,7 @@ struct
          end
 
     fun adjacent(n) = let
-        val adjList_n = Splaymap.find(!adjList, n) 
+        val adjList_n = case Splaymap.peek(!adjList, n) of SOME(x) => x | NONE => emptyStringSet
         val selectStack_set = Splayset.addList(Splayset.empty(String.compare), !selectStack)
         in Splayset.difference(adjList_n, Splayset.union(selectStack_set, !coalescedNodes))
         end
@@ -134,7 +144,7 @@ struct
 
 
     fun decrementDegree(m) = let
-        val d = Splaymap.find(!degree, m)
+        val d = case Splaymap.peek(!degree, m) of SOME(x) => x | NONE => 0
         val singleton_m = Splayset.singleton String.compare m
         val _ = degree := Splaymap.insert(!degree, m, d-1)
         val _ = if d=K then (enableMoves(Splayset.union(singleton_m, adjacent(m)));
@@ -264,10 +274,12 @@ struct
                     val _ = selectStack := List.tl(!selectStack)
                     val singleton_n = Splayset.singleton String.compare n
                     val okColors = Splayset.addList(Splayset.empty(Int.compare), List.tabulate(K, (fn(x) => x)))
+                    fun color_alias(n) = case Splaymap.peek(!color, getAlias(n)) of SOME(x)=>(Splayset.singleton Int.compare x) | NONE => emptyIntSet
                     fun aux(w, set) = if Splayset.member(Splayset.union(!coloredNodes, !precolored), getAlias(w))
-                                      then Splayset.difference(okColors, Splayset.singleton Int.compare (Splaymap.find(!color, getAlias(w))))
+                                      then Splayset.difference(okColors, color_alias(w))
                                       else set
-                    val okColors' = Splayset.foldr aux okColors (Splaymap.find(!adjList, n))
+                    val adjList_n = case Splaymap.peek(!adjList, n) of SOME(x) => x | NONE => emptyStringSet
+                    val okColors' = Splayset.foldr aux okColors adjList_n
                     val _ = if Splayset.isEmpty(okColors')
                             then spilledNodes := Splayset.union(!spilledNodes, singleton_n)
                             else (coloredNodes := Splayset.union(!coloredNodes, singleton_n);
@@ -340,15 +352,18 @@ struct
         val _ = initial := Splayset.union(Splayset.union(!coloredNodes, !coalescedNodes), !newTemps)
         val _ = coloredNodes := Splayset.empty(String.compare)
         val _ = coalescedNodes := Splayset.empty(String.compare)
-        in () end
+        in (frame, newIns) end
             
 
-    fun main((flowgraph, nodeToIns), (intgraph, liveMap)) = let
-        val _ = build((flowgraph,nodeToIns), (intgraph, liveMap))
+    fun main(((flowgraph, nodeToIns), frame), (intgraph, liveMap)) = let
+        val FGRAPH({control, def, use, ismove}) = flowgraph
+        val instructions_nodes = List.rev(nodes control)
+        val instructions = map (fn((g,n))=>Splaymap.find(nodeToIns, n)) instructions_nodes
+        val _ = build((flowgraph,nodeToIns), (intgraph, liveMap)) (*handle NotFound => (print("build\n");[])*)
         val _ = makeWorklist()
         fun aux() = let
             val _ = if not (Splayset.isEmpty(!simplifyWorklist))
-                    then simplify() 
+                    then (simplify())
                     else if not (Splayset.isEmpty(!worklistMoves))
                          then coalesce()
                          else if not (Splayset.isEmpty(!freezeWorklist))
@@ -356,8 +371,22 @@ struct
                               else if not (Splayset.isEmpty(!spillWorklist))
                                    then selectSpill()
                                    else ()
-             in () end
-         in () end
+             in () end 
+         val _ = aux()
+         val _ = while (not (Splayset.isEmpty(!simplifyWorklist)) orelse not (Splayset.isEmpty(!worklistMoves))
+                       orelse not (Splayset.isEmpty(!freezeWorklist)) orelse not (Splayset.isEmpty(!spillWorklist)))
+                 do (aux())
+         val _ = assignColors()
+         
+         val needsRewrite = not (Splayset.isEmpty(!spilledNodes))
+         val (frame', newIns) = if needsRewrite
+                                then rewriteProgram(frame, instructions)
+                                else (frame, instructions)
+         val _ = if needsRewrite 
+                 then main(((flowgraph, nodeToIns), frame'), (intgraph, liveMap))
+                 else Splaymap.mkDict(String.compare)
+
+         in (!color) end
 end
 
 

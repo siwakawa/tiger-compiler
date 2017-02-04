@@ -6,9 +6,9 @@ struct
 	fun simpleregalloc (frm:frame.frame) (body:instr list) =
 	let
 		(* COMPLETAR: Temporarios que ya tienen color asignado (p.ej, el temporario que representa a rax) *)
-		val precolored = ["a", "b", "c", "d", "e", "f"]
+		val precolored = tigerframe.list_regs
 		(* COMPLETAR: Temporarios que se pueden usar (p.ej, el temporario que representa a rax. Diferencia con precolored: el temporario que representa a rbp no se puede usar) *)
-		val asignables = ["b", "c", "d", "e", "f"]
+		val asignables = tigerframe.usable_regs
 		(* COMPLETAR: movaMem crea una instrucción que mueve un temporario a memoria. movaTemp, de memoria a un temporario.*)
 		fun movaMem(temp, mempos) =
 			let

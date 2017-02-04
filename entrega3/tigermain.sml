@@ -51,23 +51,24 @@ fun main(args) =
 
          val assem_trees = List.map (fn(stm_list, f) => 
                              let val asm_without_prolog = List.concat (List.map (fn(stm) => tigercodegen.codegen f stm) stm_list)
-                             in tigerframe.procEntryExit3(f, asm_without_prolog)
+                             in (tigerframe.procEntryExit3(f, asm_without_prolog), f)
                              end) canonized_blocks
 
          val asm_formatter = tigerassem.format(tigertemp.makeString)
 
-         val _ = if code then (List.app (fn({prolog=p,body=b,epilog=e}) => 
+         val _ = if code then (List.app (fn(({prolog=p,body=b,epilog=e}, f)) => 
                             let val bodies_w_format = List.map asm_formatter b
                             in print p; map print bodies_w_format; print e
                             end) assem_trees)
                          else ()
 
-        val fgraph = List.map (fn({body=b,...}) => tigerflowgraph.instrs2graph b) assem_trees
+        val fgraphs_with_frames = List.map (fn({body=b,...}, f) => (tigerflowgraph.instrs2graph b, f)) assem_trees
+        val fgraphs = List.map (#1) fgraphs_with_frames
         fun print_fgraph(fg) = let
-            val defs_list = List.map (fn((tigerflowgraph.FGRAPH({def=ds,...}),_)) => ds) fgraph
-            val uses_list = List.map (fn((tigerflowgraph.FGRAPH({use=us,...}),_)) => us) fgraph
-            val ismove_list = List.map (fn((tigerflowgraph.FGRAPH({ismove=i,...}),_)) => i) fgraph
-            val nodes_graph_list = List.map (fn((tigerflowgraph.FGRAPH({control=g,...}),_)) => tigergraph.nodes g) fgraph
+            val defs_list = List.map (fn((tigerflowgraph.FGRAPH({def=ds,...}),_)) => ds) fgraphs
+            val uses_list = List.map (fn((tigerflowgraph.FGRAPH({use=us,...}),_)) => us) fgraphs
+            val ismove_list = List.map (fn((tigerflowgraph.FGRAPH({ismove=i,...}),_)) => i) fgraphs
+            val nodes_graph_list = List.map (fn((tigerflowgraph.FGRAPH({control=g,...}),_)) => tigergraph.nodes g) fgraphs
             fun get_list_nodes_string(ns) = String.concatWith "," (List.map (fn((g,n)) => Int.toString n) ns)
             fun print_node_pred_suc(g,n) = print("Node "^(Int.toString(n))^", Preds: "^get_list_nodes_string(tigergraph.pred(g,n))^ "; Succs: "^get_list_nodes_string(tigergraph.succ(g,n))^"\n")
     
@@ -84,13 +85,14 @@ fun main(args) =
             val _ = List.app (fn(nodes) => List.app print_node_pred_suc nodes) nodes_graph_list
          in () end
 
-       val _ = if flow then print_fgraph(fgraph) else ()
+       val _ = if flow then print_fgraph(fgraphs) else ()
 
-       val igraph = List.map (tigerliveness.interferenceGraph o #1) fgraph
+       val igraphs = List.map (tigerliveness.interferenceGraph o #1) fgraphs
        
-       val _ = if live then List.app (tigerliveness.show o #1) igraph else ()
+       val _ = if live then List.app (tigerliveness.show o #1) igraphs else ()
 
-       val _ = ListPair.map tigercolor.main (fgraph, igraph)
+       val colors = ListPair.map tigercolor.main (fgraphs_with_frames, igraphs) 
+       val _ = List.app (fn(map) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) colors
 
 	in
 		print "yes!!\n"
