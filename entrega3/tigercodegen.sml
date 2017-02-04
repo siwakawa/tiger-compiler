@@ -51,8 +51,8 @@ fun codegen frame stm =
             (* general case for MOVE *)
             | munchStm(MOVE(e1, e2)) = 
                 let val t = tigertemp.newtemp() 
-                in emit(OPER{assem="movl `s0, `d0", dst=[t], src=[munchExp e2], jump=NONE});
-                   emit(OPER{assem="movl `s0, `d0", dst=[munchExp e1], src=[t], jump=NONE})
+                in emit(tigerassem.MOVE{assem="movl `s0, `d0", dst=t, src=(munchExp e2)});
+                   emit(tigerassem.MOVE{assem="movl `s0, `d0", dst=(munchExp e1), src=t})
                 end
             | munchStm(EXP(CALL(NAME f, args))) = 
                (* We don't save the caller saves, we just put them in dst so the register allocator will know they can be overwritten inside the call *)
@@ -130,9 +130,9 @@ fun codegen frame stm =
                         let val (instr, e) = case h of
                                                 CONST i => (OPER{assem="pushl $" ^Int.toString i, src=[], dst=[], jump=NONE}, "")
                                                 | NAME n => (OPER{assem="pushl $" ^n, src=[], dst=[], jump=NONE}, "")
-                                                | TEMP t => (OPER{assem="pushl " ^t, src=[t], dst=[], jump=NONE}, "")
+                                                | TEMP t => (OPER{assem="pushl `s0", src=[t], dst=[], jump=NONE}, "")
                                                 | MEM (CONST x) => (OPER{assem="pushl "^Int.toString x, src=[], dst=[], jump=NONE}, "")
-                                                | MEM (TEMP r) => (OPER{assem="pushl (" ^r ^")", src=[r], dst=[], jump=NONE}, "")
+                                                | MEM (TEMP r) => (OPER{assem="pushl (`s0)", src=[r], dst=[], jump=NONE}, "")
                                                 | e => (OPER{assem="pushl `s0", src=[munchExp e], dst=[], jump=NONE}, "")
                         in emit instr; munchArgsST t
                         end
