@@ -375,7 +375,7 @@ fun binOpIntRelExp {left,oper,right} =
 fun binOpStrExp {left,oper,right} =
     let val l = unEx left
         val r = unEx right
-        fun subst oper = fn(t, f) => CJUMP(oper, ESEQ (EXP (externalCall ("_StringCompare", [l,r])), TEMP rv), CONST 0, t, f)
+        fun subst oper = fn(t, f) => CJUMP(oper, ESEQ (EXP (externalCall ("_stringCompare", [l,r])), TEMP rv), CONST 0, t, f)
     in case oper of
          EqOp => Cx (subst EQ)
          | NeqOp => Cx (subst NE)
