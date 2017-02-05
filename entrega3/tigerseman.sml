@@ -330,9 +330,10 @@ fun transExp(venv, tenv) =
                  fun get_func_entry(name, params, result) = 
                    let val parent=topLevel()
                        val escapes = map (! o #esc) params
+                       val newName = if name <> "_tigermain" then name^"_"^tigertemp.newlabel() else name
                        (* append true to account for the SL *)
-                       val new_level=newLevel({parent=parent, name=name, formals=true::escapes})
-                   in (name, Func({level=new_level, label=name, formals=map (#ty) params, result=result, extern=false}))
+                       val new_level=newLevel({parent=parent, name=newName, formals=true::escapes})
+                   in (name, Func({level=new_level, label=newName, formals=map (#ty) params, result=result, extern=false}))
                    end
                  val sigs = map get_sig fs
                  fun has_more_that_one_definition(f_name, signature_list) =  

@@ -43,14 +43,14 @@ fun codegen frame stm =
             | munchStm(MOVE(MEM e1, MEM e2)) =  
                 let val t = tigertemp.newtemp() 
                 in emit(OPER{assem="movl (`s0), `d0", dst=[t], src=[munchExp e2], jump=NONE});
-                   emit(OPER{assem="movl `s0, (`d0)", dst=[munchExp e1], src=[t], jump=NONE})
+                   emit(OPER{assem="movl `s0, (`s1)", dst=[], src=[t, munchExp e1], jump=NONE})
                 end
             | munchStm(MOVE(MEM(CONST i), e)) =
                 emit(OPER{assem="movl `s0, " ^Int.toString i, src=[munchExp e], dst=[], jump=NONE})
             | munchStm(MOVE(MEM e1, e2)) =  
                 let val t = tigertemp.newtemp() 
                 in emit(OPER{assem="movl `s0, `d0", dst=[t], src=[munchExp e2], jump=NONE});
-                   emit(OPER{assem="movl `s0, (`d0)", dst=[munchExp e1], src=[t], jump=NONE})
+                   emit(OPER{assem="movl `s0, (`s1)", dst=[], src=[t, munchExp e1], jump=NONE})
                 end
             (* general case for MOVE *)
             | munchStm(MOVE(e1, e2)) = 
@@ -89,12 +89,12 @@ fun codegen frame stm =
                 end
             | munchStm(CJUMP(relop, CONST i, e, l1, l2)) =
                 let val _ = emit(OPER{assem="cmpl $" ^Int.toString i ^ ", `s0", src=[munchExp e], dst=[], jump=NONE})
-                in emit(OPER{assem=relOp relop ^ " " ^ l1, src=[], dst=[], jump=SOME[l1, l2]})
+                in emit(OPER{assem=relOp relop ^ " `j0", src=[], dst=[], jump=SOME[l1, l2]})
                 end
             (* general case for CJUMP *)
             | munchStm(CJUMP(relop, e1, e2, l1, l2)) =
-                let val _ = emit(OPER{assem="cmpl `s0, `s1", src=[munchExp e1, munchExp e2], dst=[], jump=NONE})
-                in emit(OPER{assem=relOp relop ^ " `j0" ^ l1, src=[], dst=[], jump=SOME[l1, l2]})
+                let val _ = emit(OPER{assem="cmpl `s0, `s1", src=[munchExp e2, munchExp e1], dst=[], jump=NONE})
+                in emit(OPER{assem=relOp relop ^ " `j0", src=[], dst=[], jump=SOME[l1, l2]})
                 end
             | munchStm(JUMP((NAME l),ls)) = emit(OPER{assem="jmp `j0", src=[], dst=[], jump=SOME ls})
             | munchStm(JUMP(e,ls)) = emit(OPER{assem="jmp *`s0", src=[munchExp e], dst=[], jump=SOME ls})
