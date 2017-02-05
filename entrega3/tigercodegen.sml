@@ -61,7 +61,7 @@ fun codegen frame stm =
             | munchStm(EXP(CALL(NAME f, args))) = 
                (* We don't save the caller saves, we just put them in dst so the register allocator will know they can be overwritten inside the call *)
                (* (saveCallerSaves(); *)
-                 (munchArgs args;
+                 (munchArgs (List.rev args);
                  emit(OPER{assem="call "^f, src=[], dst=tigerframe.callersaves, jump=NONE}))
                (* restoreCallerSaves()) *)
             (* general case for EXP *)
@@ -84,7 +84,7 @@ fun codegen frame stm =
                 in emit(OPER{assem="jmp `j0", src=[], dst=[], jump=SOME[l']})
                 end
             | munchStm(CJUMP(relop, e, CONST i, l1, l2)) =
-                let val _ = emit(OPER{assem="cmpl `s0, $"^Int.toString i, src=[munchExp e], dst=[], jump=NONE})
+                let val _ = emit(OPER{assem="cmpl $"^Int.toString i ^", `s0", src=[munchExp e], dst=[], jump=NONE})
                 in emit(OPER{assem=relOp relop ^ " `j0" , src=[], dst=[], jump=SOME[l1, l2]})
                 end
             | munchStm(CJUMP(relop, CONST i, e, l1, l2)) =
@@ -93,7 +93,7 @@ fun codegen frame stm =
                 end
             (* general case for CJUMP *)
             | munchStm(CJUMP(relop, e1, e2, l1, l2)) =
-                let val _ = emit(OPER{assem="cmpl `s1, `s0", src=[munchExp e1, munchExp e2], dst=[], jump=NONE})
+                let val _ = emit(OPER{assem="cmpl `s0, `s1", src=[munchExp e1, munchExp e2], dst=[], jump=NONE})
                 in emit(OPER{assem=relOp relop ^ " `j0" ^ l1, src=[], dst=[], jump=SOME[l1, l2]})
                 end
             | munchStm(JUMP((NAME l),ls)) = emit(OPER{assem="jmp `j0", src=[], dst=[], jump=SOME ls})

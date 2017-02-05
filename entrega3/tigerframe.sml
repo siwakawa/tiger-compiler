@@ -38,7 +38,7 @@ val log2WSz = 2				(* base two logarithm of word size in bytes *)
 val fpPrev = 0				(* offset (bytes) *)
 val fpPrevLev = 8			(* offset (bytes) *)
 val argsInicial = 0			(* words *)
-val argsOffInicial = 1		(* words *)
+val argsOffInicial = 3		(* words *)
 val argsGap = wSz			(* bytes *)
 val regInicial = 1			(* reg *)
 val localsInicial = 0		(* words *)
@@ -47,7 +47,8 @@ val calldefs = [rv]
 val specialregs = [rv, fp, sp]
 val argregs = []
 val callersaves = [rv, ecx, ov]
-val calleesaves = [fp, ebx, edi, esi]
+(*fp not in calleesaves because we already push/pop it in the prolog/epilog*)
+val calleesaves = [ebx, edi, esi]
 
 type frame = {
 	name: string,
@@ -115,12 +116,12 @@ fun procEntryExit1 (frame,body) =
 fun procEntryExit2 (frame,body) =
     body@[tigerassem.OPER{assem="", src=[sp]@calleesaves, dst=[], jump=NONE}] *)
 
-fun procEntryExit3({name=n, formals=ps, locals=ls, actualArg=_, actualLocal=_, actualReg=_}, body) = 
+fun procEntryExit3({name=n, formals=ps, locals=ls, actualArg=_, actualLocal=al, actualReg=_}, body) = 
     {prolog = ".globl " ^n ^ "\n"^
               n ^ ":\n"^
               "pushl %ebp\n" ^
               "movl %esp, %ebp\n" ^
-              "subl $~"^Int.toString (length ls) ^", %esp\n",
+              "subl $"^Int.toString (Int.abs ((!al) * wSz)) ^", %esp\n",
      body = body,
      epilog = "leave\nret\n"}
     

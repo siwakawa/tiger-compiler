@@ -91,8 +91,22 @@ fun main(args) =
        
        val _ = if live then List.app (tigerliveness.show o #1) igraphs else ()
 
-       val colors = ListPair.map tigercolor.main (fgraphs_with_frames, igraphs) 
-       val _ = List.app (fn(map) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) colors
+       val assigned_ins = ListPair.map tigercolor.main (fgraphs_with_frames, igraphs)
+       val prolog_epilog = List.map (fn(({prolog=p,body=b,epilog=e}, f)) => (p, e)) assem_trees
+       val _ = List.app (fn((_, map)) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) assigned_ins
+
+       (* Print strings *)
+       val _ = print(".data\n")
+       val _ = List.app (fn(lab, str) => print(lab^":\n"^str^"\n")) unpacked_string_flags
+
+       (* Print code *)
+       val _ = print(".text\n")
+       val _ =  (ListPair.app (fn((ins, coloring), (prolog,epilog)) => 
+                            let val bodies_w_format = List.map asm_formatter ins 
+                            in print(prolog); List.app print bodies_w_format; print(epilog)
+                            end) (assigned_ins, prolog_epilog))
+
+
 
 	in
 		print "yes!!\n"
