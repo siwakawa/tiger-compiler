@@ -314,7 +314,7 @@ struct
 
     fun assignColors() = let
         val _ = if (List.null(!selectStack))
-                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) handle NotFound => (print(n ^ ", alias: "^getAlias(n)^"\n");0)))) (!coalescedNodes)
+                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) (*handle NotFound => (print(n ^ ", alias: "^getAlias(n)^"\n");0)*)))) (!coalescedNodes)
                 else (let
                     (* pop *)
                     val n = hd(!selectStack)        
@@ -354,7 +354,7 @@ struct
                     |SOME(_) => raise Fail "Internal error, allocated spilled node as register"
                     |NONE => ~1 (*If d is not in allocatedNodes, then it is not a spilledNode and this -1 is ignored in the next line *)
                 val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, d)
-                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp]) 
+                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`s1)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp]) 
                              else ([], [], [], [d])
                 in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
             fun processUse(u, (prevs, posts, uses, defs)) = let
@@ -370,7 +370,7 @@ struct
                 in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
             val (prev, post, newUses, newDefs) = List.foldr processDef ([], [], [], []) ds
             val (prev', post', newUses', newDefs') = List.foldr processUse ([], [], [], []) ss 
-            val newIns = OPER{assem=a, dst=newDefs', src=newUses', jump=j}
+            val newIns = OPER{assem=a, dst=newDefs, src=newUses', jump=j}
         in prev'@[newIns]@post' end
 
         | processInstr(ins as MOVE{assem=a, dst=dest, src=src}) = let
@@ -382,7 +382,7 @@ struct
                     |SOME(_) => raise Fail "Internal error, allocated spilled node as register"
                     |NONE => ~1 (*If d is not in allocatedNodes, then it is not a spilledNode and this -1 is ignored in the next line *)
                 val (prev, post, newUses, newDefs) = if Splayset.member(!spilledNodes, d)
-                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`d0)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp])
+                             then ([], [OPER{assem="movl `s0 "^ Int.toString stackPos ^"(`s1)", src=[newTemp, fp], dst=[], jump=NONE}], [], [newTemp])
                              else ([], [], [], [d])
                 in (prev@prevs, post@posts, newUses@uses, newDefs@defs) end
             fun processUse(u, (prevs, posts, uses, defs)) = let
@@ -468,7 +468,7 @@ struct
          
          val needsRewrite = not (Splayset.isEmpty(!spilledNodes))
          val (frame', newIns, newInitial) = if needsRewrite
-                                            then rewriteProgram(frame, instructions) (*handle NotFound => (print("rewriteProgram\n"); (frame, instructions))*)
+                                            then rewriteProgram(frame, instructions) (*handle NotFound => (print("rewriteProgram\n"); (frame, instructions,!initial))*)
                                             else (frame, instructions, !initial)
          val _ = if needsRewrite 
                  (* We call main', because we don't want to reset the globals or reinitialize initial*)
