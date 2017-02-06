@@ -21,8 +21,10 @@ fun main(args) =
 		val (inter, l7)		= arg(l6, "-inter") 
 		val (fold, l8)		= arg(l7, "-fold") 
 		val (live, l9)		= arg(l8, "-live") 
+		val (color, l10)	= arg(l9, "-color") 
+		val (final, l11)	= arg(l10, "-final") 
 		val entrada =
-			case l9 of
+			case l11 of
 			[n] => ((open_in n)
 					handle _ => raise Fail (n^" no existe!"))
 			| [] => std_in
@@ -91,22 +93,33 @@ fun main(args) =
        
        val _ = if live then List.app (tigerliveness.show o #1) igraphs else ()
 
-       val assigned_ins = ListPair.map tigercolor.main (fgraphs_with_frames, igraphs)
+       val assigned_ins = List.map tigercolor.main assem_trees (*handle NotFound => (print("tigercolor.main\n");[])*)
        val prolog_epilog = List.map (fn(({prolog=p,body=b,epilog=e}, f)) => (p, e)) assem_trees
-       val _ = List.app (fn((_, map)) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) assigned_ins
 
-       (* Print strings *)
-       val _ = print(".data\n")
-       val _ = List.app (fn(lab, str) => print(lab^":\n"^str^"\n")) unpacked_string_flags
+       (* Print colors assigned to each temporary *)
+       val _ = if color then List.app (fn((_, map)) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) assigned_ins else ()
 
-       (* Print code *)
-       val _ = print(".text\n")
-       val _ =  (ListPair.app (fn((ins, coloring), (prolog,epilog)) => 
-                            let val bodies_w_format = List.map asm_formatter ins 
-                            in print(prolog); List.app print bodies_w_format; print(epilog)
-                            end) (assigned_ins, prolog_epilog))
+       fun get_final() = let
+           (* strings *)
+           val a = ".data\n"
+           val b = List.foldr (fn((lab, str), total) => (lab^":\n"^str^"\n")^total) "" unpacked_string_flags
+           val c = "\n"
+
+           (* code *)
+           val d = ".text\n"
+           val e =  (ListPair.foldr (fn((ins, coloring), (prolog,epilog), total) => 
+                             let val bodies_w_format = List.map asm_formatter ins 
+                             in prolog ^ (List.foldr (fn(b, bs) => b^bs)  "" bodies_w_format) ^ epilog ^"\n" ^ total
+                             end) "" (assigned_ins, prolog_epilog))
+           
+           in a^b^c^d^e end
+
+        val _ = if final then print (get_final()) else ()
 
 
+        val fd = TextIO.openOut "out.s"
+        val _ = TextIO.output(fd, get_final())
+        val _ = TextIO.closeOut fd
 
 	in
 		print "yes!!\n"

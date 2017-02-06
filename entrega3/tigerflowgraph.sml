@@ -73,8 +73,8 @@ struct
                                          fun add_preds_and_sucs((g, n)) = let val succ_labels = case Splaymap.peek(nodeToPredLabels, n) of
                                                                                                  SOME(ls) => ls
                                                                                                | NONE => []
-                                                                          in List.app (fn(l) => mk_edge({to=(g, Splaymap.find(labelToNodeMap, l)), from=(g, n)})) succ_labels
-                                                                          end
+                                                                          in List.app (fn(l) => mk_edge({to=(g, Splaymap.find(labelToNodeMap, l) (*handle NotFound => (print(l^"\n");32)*)), from=(g, n)})) succ_labels
+                                                                          end 
                                          val _ = List.map add_preds_and_sucs (nodes g')
                                      in (FGRAPH{control=g', def=d, use=u, ismove=im}, nodeToIns')
                                      end
