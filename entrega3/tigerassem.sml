@@ -34,10 +34,11 @@ struct
             fun replace_tilde(#"~") = "-"
               | replace_tilde(x) = String.str x
             fun rewrite(a) = String.translate replace_tilde a
-        in fn OPER{assem,dst,src,jump=NONE} => speak(rewrite assem,src,dst,nil) ^ "\n"
-            | OPER{assem,dst,src,jump=SOME j} => speak(rewrite assem,src,dst,j) ^ "\n"
+            fun add_tab(s) = "\t"^s
+        in fn OPER{assem,dst,src,jump=NONE} => speak(add_tab (rewrite assem),src,dst,nil) ^ "\n"
+            | OPER{assem,dst,src,jump=SOME j} => speak(add_tab (rewrite assem),src,dst,j) ^ "\n"
 	        | LABEL{assem,...} => assem ^ "\n"
-	        | MOVE{assem,dst,src} => speak(rewrite assem,[src],[dst],nil) ^ "\n"
+	        | MOVE{assem,dst,src} => speak(add_tab (rewrite assem),[src],[dst],nil) ^ "\n"
         end
 
 

@@ -119,10 +119,10 @@ fun procEntryExit2 (frame,body) =
 fun procEntryExit3({name=n, formals=ps, locals=ls, actualArg=_, actualLocal=al, actualReg=_}, body) = 
     {prolog = ".globl " ^n ^ "\n"^
               n ^ ":\n"^
-              "pushl %ebp\n" ^
-              "movl %esp, %ebp\n" ^
-              "subl $"^Int.toString (Int.abs ((!al) * wSz)) ^", %esp\n",
+              "\tpushl %ebp\n" ^
+              "\tmovl %esp, %ebp\n" ^
+              "\tsubl $"^Int.toString (Int.abs ((!al) * wSz)) ^", %esp\n",
      body = body,
-     epilog = "leave\nret\n"}
+     epilog = "\tleave\n\tret\n"}
     
 end
