@@ -35,16 +35,47 @@ fun codegen frame stm =
             | munchStm(MOVE(TEMP t1, MEM(BINOP(PLUS, CONST i, TEMP t2)))) = 
                 emit(OPER{assem="movl "^Int.toString(i)^ "(`s0), `d0", dst=[t1], src=[t2], jump=NONE})
             | munchStm(MOVE(TEMP t1, MEM(BINOP(PLUS, TEMP t2, CONST i)))) = 
-                emit(OPER{assem="movl "^Int.toString(i)^ "(`s0), `d0",  dst=[t1], src=[t2], jump=NONE})
+                munchStm(MOVE(TEMP t1, MEM(BINOP(PLUS, CONST i, TEMP t2))))
+
             | munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), TEMP t1)) = 
                 emit(OPER{assem="movl `s0, "^(Int.toString i)^"(`s1)",  dst=[], src=[t1, t2], jump=NONE})
             | munchStm(MOVE(MEM(BINOP(PLUS, CONST i, TEMP t2)), TEMP t1)) = 
-                emit(OPER{assem="movl `s0, "^(Int.toString i)^"(`s1)",  dst=[], src=[t1, t2], jump=NONE})
+                munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), TEMP t1)) 
+
+            | munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), CONST i2)) = 
+                emit(OPER{assem="movl $"^(Int.toString i2)^", "^(Int.toString i)^"(`s0)",  dst=[], src=[t2], jump=NONE})
+            | munchStm(MOVE(MEM(BINOP(PLUS, CONST i, TEMP t2)), CONST i2)) = 
+                munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), CONST i2)) 
+
+
+            | munchStm(MOVE(MEM(BINOP(PLUS, CONST i, TEMP t2)), e1)) = 
+                let val t = tigertemp.newtemp() 
+                in emit(OPER{assem="movl `s0, `d0", dst=[t], src=[munchExp e1], jump=NONE});
+                   emit(OPER{assem="movl `s0, "^(Int.toString i)^"(`s1)",  dst=[], src=[t, t2], jump=NONE})
+                end
+            | munchStm(MOVE(MEM(BINOP(PLUS, TEMP t2, CONST i)), e1)) = 
+                munchStm(MOVE(MEM(BINOP(PLUS, CONST i, TEMP t2)), e1)) 
+
+            | munchStm(MOVE(MEM e1, CONST i)) =  
+                emit(OPER{assem="movl $"^(Int.toString i)^", (`s0)", dst=[], src=[munchExp e1], jump=NONE})
+
+            | munchStm(MOVE(MEM e1, TEMP t1)) =  
+                emit(OPER{assem="movl `s0, (`s1)", dst=[], src=[t1, munchExp e1], jump=NONE})
+            | munchStm(MOVE(TEMP t1, MEM e1)) =  
+                emit(OPER{assem="movl (`s0), `d0", dst=[t1], src=[munchExp e1], jump=NONE})
+
+            | munchStm(MOVE(TEMP t1, CONST i)) =  
+                emit(OPER{assem="movl $"^(Int.toString i)^", `d0", dst=[t1], src=[], jump=NONE})
+
+            | munchStm(MOVE(TEMP t1, e1)) =  
+                emit(tigerassem.MOVE{assem="movl `s0, `d0", dst=t1, src=(munchExp e1)})
+
             | munchStm(MOVE(MEM e1, MEM e2)) =  
                 let val t = tigertemp.newtemp() 
                 in emit(OPER{assem="movl (`s0), `d0", dst=[t], src=[munchExp e2], jump=NONE});
                    emit(OPER{assem="movl `s0, (`s1)", dst=[], src=[t, munchExp e1], jump=NONE})
                 end
+
             | munchStm(MOVE(MEM(CONST i), e)) =
                 emit(OPER{assem="movl `s0, " ^Int.toString i, src=[munchExp e], dst=[], jump=NONE})
             | munchStm(MOVE(MEM e1, e2)) =  
@@ -52,6 +83,8 @@ fun codegen frame stm =
                 in emit(OPER{assem="movl `s0, `d0", dst=[t], src=[munchExp e2], jump=NONE});
                    emit(OPER{assem="movl `s0, (`s1)", dst=[], src=[t, munchExp e1], jump=NONE})
                 end
+
+
             (* general case for MOVE *)
             | munchStm(MOVE(e1, e2)) = 
                 let val t = tigertemp.newtemp() 
@@ -102,12 +135,16 @@ fun codegen frame stm =
 
         and result(gen) = let val t = tigertemp.newtemp() in gen t; t end
 
-        and munchExp(MEM(BINOP(PLUS, e1, CONST i))) = result(fn r => emit(OPER{assem="movl "^ Int.toString i ^"(`s0), `d0", src=[munchExp e1], dst=[r], jump=NONE}))
-            | munchExp(MEM(BINOP(PLUS, CONST i, e1))) = result(fn r => emit(OPER{assem="movl "^ Int.toString i ^"(`s0), `d0", src=[munchExp e1], dst=[r], jump=NONE}))
+        and  munchExp(MEM(BINOP(PLUS, CONST i, (TEMP t)))) = result(fn r => emit(OPER{assem="movl "^ Int.toString i ^"(`s0), `d0", src=[t], dst=[r], jump=NONE}))
+            | munchExp(MEM(BINOP(PLUS, (TEMP t), CONST i))) = munchExp(MEM(BINOP(PLUS, CONST i, (TEMP t))))
  
-
-           | munchExp(MEM(CONST i)) = result(fn r => emit(OPER{assem="movl ("^Int.toString i ^ "), `d0", src=[], dst=[r], jump=NONE}))
+            | munchExp(MEM(BINOP(PLUS, e1, CONST i))) = result(fn r => emit(OPER{assem="movl "^ Int.toString i ^"(`s0), `d0", src=[munchExp e1], dst=[r], jump=NONE}))
+            | munchExp(MEM(BINOP(PLUS, CONST i, e1))) = result(fn r => emit(OPER{assem="movl "^ Int.toString i ^"(`s0), `d0", src=[munchExp e1], dst=[r], jump=NONE}))
+            | munchExp(MEM(CONST i)) = result(fn r => emit(OPER{assem="movl ("^Int.toString i ^ "), `d0", src=[], dst=[r], jump=NONE}))
             | munchExp(MEM(e1)) = result(fn r => emit(OPER{assem="movl (`s0), `d0", src=[munchExp e1], dst=[r], jump=NONE}))
+            | munchExp(BINOP(PLUS, CONST i, TEMP t1 )) = result(fn r => (emit(tigerassem.MOVE{assem="movl `s0, `d0", src=t1, dst=r});
+                                                                         emit(OPER{assem="addl $"^(Int.toString i)^", `d0", src=[], dst=[r], jump=NONE})))
+            | munchExp(BINOP(PLUS, TEMP t1, CONST i )) = munchExp(BINOP(PLUS, CONST i, TEMP t1 ))
             | munchExp(BINOP(PLUS, e1, e2)) = result(fn r => (emit(tigerassem.MOVE{assem="movl `s0, `d0", src=(munchExp e1), dst=r}); emit(OPER{assem="addl `s0, `d0", src=[munchExp e2, r], dst=[r], jump=NONE})))
             | munchExp(BINOP(MINUS, e1, e2)) = result(fn r => (emit(tigerassem.MOVE{assem="movl `s0, `d0", src=(munchExp e1), dst=r}); emit(OPER{assem="subl `s0, `d0", src=[munchExp e2, r], dst=[r], jump=NONE})))
             | munchExp(BINOP(MUL, e1, e2)) = result(fn r => (emit(tigerassem.MOVE{assem="movl `s0, `d0", src=(munchExp e1), dst=r}); emit(OPER{assem="imull `s0, `d0", src=[munchExp e2, r], dst=[r], jump=NONE})))
@@ -125,7 +162,8 @@ fun codegen frame stm =
             | munchExp(CONST(i)) = result(fn r => emit(tigerassem.OPER{assem="movl $"^Int.toString i ^", `d0", src=[], dst=[r], jump=NONE}))
             | munchExp(NAME(l)) = result(fn r => emit(tigerassem.OPER{assem="movl $" ^ l ^ ", `d0", src=[], dst=[r], jump=NONE}))
             | munchExp(TEMP(r)) = r
-            | munchExp(_) = raise Fail "Internal error: munchExp unhandled case"
+            | munchExp(CALL(NAME f, args)) = result(fn r => (munchArgs (List.rev args); emit(OPER{assem="call "^f, src=[], dst=tigerframe.callersaves, jump=NONE}); emit(tigerassem.MOVE{assem="movl `s0, `d0", src=rv, dst=r})))
+            | munchExp((_)) = raise Fail "Internal error: munchExp unhandled case"
 
 
         and munchArgs params =
