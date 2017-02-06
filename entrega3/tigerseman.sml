@@ -233,7 +233,7 @@ fun transExp(venv, tenv) =
                 val _ = if tiposIguales tylo TInt andalso tiposIguales tyhi TInt
                         then () else error("For subscripts are not integers", nl)
                 val level = getActualLev()
-                val acc' = allocLocal (topLevel()) (!escape)
+                val acc' = allocLocal (topLevel()) true
                 val _ = preWhileForExp()
                 val venv' = fromTab venv
                 val venv'' = tabInserta (var, VIntro({access=acc', level=level}), venv')

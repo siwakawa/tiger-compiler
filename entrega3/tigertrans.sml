@@ -289,10 +289,15 @@ fun forExp {lo, hi, var, body} =
                                         LABEL lsal]
                       | _ => let val t = newtemp()
                       (* Second case, hi not a CONST *)
-                             in [MOVE(var', unEx lo), MOVE(TEMP t, unEx hi), unNx body,
-                                 CJUMP(EQ, var', TEMP t, lsal, l1),
-                                 LABEL l1, MOVE(var', BINOP(PLUS, var', CONST 1)),
-                                 JUMP (NAME l2, [l2]), LABEL lsal]
+                             in [MOVE(var', unEx lo),
+                                 MOVE(TEMP t, unEx hi),
+                                 JUMP (NAME l2, [l2]),
+                                 LABEL l1,
+                                 unNx body,
+                                 MOVE(var', BINOP(PLUS, var', CONST 1)),
+                                 LABEL l2,
+                                 CJUMP(GT, var', TEMP t, lsal, l1),
+                                 LABEL lsal]
                              end))
     end
 
