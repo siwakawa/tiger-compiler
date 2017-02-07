@@ -317,7 +317,7 @@ struct
 
     fun assignColors() = let
         val _ = if (List.null(!selectStack))
-                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) (*handle NotFound => (print(n ^ ", alias: "^getAlias(n)^"\n");0)*)))) (!coalescedNodes)
+                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) handle NotFound => (print(n ^ ", alias: "^getAlias(n)^"\n");0)))) (!coalescedNodes)
                 else (let
                     (* pop *)
                     val n = hd(!selectStack)        
@@ -341,7 +341,6 @@ struct
     fun rewriteProgram(frame, instructions) = let
         fun allocNodesFold(n, map) = Splaymap.insert(map, n, allocLocal frame true)
         val allocatedNodes = Splayset.foldr allocNodesFold (Splaymap.mkDict(String.compare)) (!spilledNodes)
-        fun replaceTemp(old, new, ls) = List.map (fn(x) => if x=old then new else x) ls
         val newTemps = ref (Splayset.empty(String.compare))
         fun processInstr(ins as OPER{assem=a, dst=ds, src=ss, jump=j}) = let
             fun processDef(d, (prevs, posts, uses, defs)) = 
@@ -419,7 +418,7 @@ struct
 
     fun assign_registers(instructions) = let
         val color_to_reg = Splayset.foldr (fn(reg,newMap) => Splaymap.insert(newMap, Splaymap.find(!color, reg), reg)) (Splaymap.mkDict(Int.compare)) (!precolored)
-        fun replace_temp_with_reg(t) = Splaymap.find(color_to_reg, Splaymap.find(!color, t) handle NotFound => (print("hola\n");0) )
+        fun replace_temp_with_reg(t) = Splaymap.find(color_to_reg, Splaymap.find(!color, t) (*handle NotFound => (print("hola\n");0)*) )
         fun assignInstr(OPER{assem=a, dst=ds, src=ss, jump=j}) = let
             val newDst = List.map replace_temp_with_reg ds
             val newSrc = List.map replace_temp_with_reg ss
@@ -450,12 +449,12 @@ struct
         val FGRAPH({control, def, use, ismove}) = flowgraph
         val IGRAPH{graph=ig, gtemp=nodeToTemp, moves=getMovesFun, tnode=tempToNode} = intgraph
         val nodes_ig = List.map (nodeToTemp o #2) (nodes ig)
-        val _ = print("Nodes igraph: \n")
+(*        val _ = print("Nodes igraph: \n")
         val _ = List.app (fn(x) => print(x^", ")) (Listsort.sort String.compare nodes_ig)
         val _ = print("\n")
         val _ = print("initial items: \n")
         val _ = List.app (fn(x) => print(x^", ")) (Listsort.sort String.compare (Splayset.listItems (!initial)))
-        val _ = print("\n")
+        val _ = print("\n")*)
 
         (* We don't reverse the instructions here, because this var is only used in rewriteProgram() *)
         val instructions_nodes = (nodes control)
@@ -481,24 +480,19 @@ struct
                  do (aux()) (*handle NotFound => (print("aux while\n")) *)
          val _ = assignColors() (*handle NotFound => print("assignColors")*)
          
-         val needsRewrite = not (Splayset.isEmpty(!spilledNodes))
-         val (frame', newIns, newInitial) = if needsRewrite
-                                            then rewriteProgram(frame, instructions) (*handle NotFound => (print("rewriteProgram\n"); (frame, instructions,!initial))*)
-                                            else (frame, instructions, !initial)
  (*       val _ = List.app (fn(x) => print(x^", ")) (Listsort.sort String.compare (Splayset.listItems newInitial))*)
 (*        val _ = print("\n")*)
-         val _ = if needsRewrite 
-                 (* We call main', because we don't want to reset the globals or reinitialize initial*)
-                 then main'(newIns, frame', newInitial)
-                 else ([], Splaymap.mkDict(String.compare))
-
 (*         val _  = Splaymap.app(fn(k,v) => print("Temp: "^k^", Color: "^(Int.toString(v))^"\n")) (!color)*)
-         val assigned_ins = assign_registers(newIns) (*handle NotFound => (print("assign_registers\n");newIns)*)
-         val simplified_ins = delete_redundant_moves(assigned_ins)(* handle NotFound => (print("delete_redundant_moves\n");newIns)*)
+         val needsRewrite = not (Splayset.isEmpty(!spilledNodes))
 
-         in (simplified_ins, !color) end 
-    
-    
+         in if needsRewrite
+            then (let val (frame', newIns, newInitial) = rewriteProgram(frame, instructions)
+                  in main'(newIns, frame', newInitial) (*handle NotFound => (print("rewriteProgram\n"); (frame, instructions,!initial))*)
+                  end)
+            else (instructions, !color)
+        end
+
+
     (* This is the main called from other modules. It initializes initial. It takes as an argument instruction_list=output of procEntryExit3*)
     fun main(instruction_list, frame) = let
         val _ = reset_globals(emptyStringSet)
@@ -515,8 +509,11 @@ struct
         val _ = initial := Splayset.addList(Splayset.empty(String.compare), initial_ls)
         val _ = initial := Splayset.difference(!initial, !precolored)
  
-        val (final_ins, final_color) = main'(b, frame, !initial)
-     in (final_ins, final_color)
+        val (newIns, final_color) = main'(b, frame, !initial)
+        val assigned_ins = assign_registers(newIns) (*handle NotFound => (print("assign_registers\n");newIns)*)
+        val simplified_ins = delete_redundant_moves(assigned_ins)(* handle NotFound => (print("delete_redundant_moves\n");newIns)*)
+
+     in (simplified_ins, final_color)
      end
 end
 
