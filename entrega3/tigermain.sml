@@ -34,28 +34,38 @@ fun main(args) =
 		val _ = findEscape(expr)
 		val _ = if arbol then tigerpp.exprAst expr else ()
 
+        (* Type checking and translation to intermediate code *)
 		val _ = transProg(expr);
         val frags = tigertrans.getResult()
         fun filter_fun_frags (tigerframe.PROC(_)) = true
             | filter_fun_frags _  = false 
         val fun_frags = List.filter filter_fun_frags frags
         val string_frags = List.filter (fn x => not (filter_fun_frags x)) frags
+        (******************************************************)
 
+
+        (* Canonical trees *)
         val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
+        (******************)
+
+
+        (* Intermediate code interpreter *)
         val unpacked_string_flags = List.map (fn(tigerframe.STRING(x)) => x | _ => raise Fail "Internal error") string_frags
         val _ = if inter then tigerinterp.inter true canonized_blocks unpacked_string_flags else ()
+        (********************************)
 
-         val canonized_blocks = List.map (fn(tigerframe.PROC({body=b,frame=f})) => ((tigercanon.traceSchedule o tigercanon.basicBlocks o tigercanon.linearize) b, f) |_ => raise Fail "Internal error") fun_frags
 
+         (* Constant folding *)
          val folded_canonized_blocks = List.map (fn(stm_ls, f) => ((map tigerfold.foldStm stm_ls), f)) canonized_blocks
-
          val _ = if fold then tigerinterp.inter true folded_canonized_blocks unpacked_string_flags else ()
+         (********************)
 
+
+         (* Instruction selection *)
          val assem_trees = List.map (fn(stm_list, f) => 
                              let val asm_without_prolog = List.concat (List.map (fn(stm) => tigercodegen.codegen f stm) stm_list)
                              in (tigerframe.procEntryExit3(f, asm_without_prolog), f)
                              end) canonized_blocks
-
          val asm_formatter = tigerassem.format(tigertemp.makeString)
 
          val _ = if code then (List.app (fn(({prolog=p,body=b,epilog=e}, f)) => 
@@ -63,7 +73,10 @@ fun main(args) =
                             in print p; map print bodies_w_format; print e
                             end) assem_trees)
                          else ()
+         (************************)
 
+
+        (* Flow graph generation *)
         val fgraphs_with_frames = List.map (fn({body=b,...}, f) => (tigerflowgraph.instrs2graph b, f)) assem_trees
         val fgraphs = List.map (#1) fgraphs_with_frames
         fun print_fgraph(fg) = let
@@ -88,15 +101,18 @@ fun main(args) =
          in () end
 
        val _ = if flow then print_fgraph(fgraphs) else ()
+       (*************************)
 
+
+       (* Interference graph generation *)
        val igraphs = List.map (tigerliveness.interferenceGraph o #1) fgraphs
-       
        val _ = if live then List.app (tigerliveness.show o #1) igraphs else ()
+       (********************************)
 
+
+       (* Coloring and register allocation*)
        val assigned_ins = List.map tigercolor.main assem_trees (*handle NotFound => (print("tigercolor.main\n");[])*)
        val prolog_epilog = List.map (fn(({prolog=p,body=b,epilog=e}, f)) => (p, e)) assem_trees
-
-       (* Print colors assigned to each temporary *)
        val _ = if color then List.app (fn((_, map)) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) assigned_ins else ()
 
        fun get_final() = let
@@ -114,12 +130,16 @@ fun main(args) =
            
            in a^b^c^d^e end
 
-        val _ = if final then print (get_final()) else ()
+       val _ = if final then print (get_final()) else ()
+       (**********************************)
 
 
-        val fd = TextIO.openOut "out.s"
-        val _ = TextIO.output(fd, get_final())
-        val _ = TextIO.closeOut fd
+       (* Output final result to out.s file *)
+       val fd = TextIO.openOut "out.s"
+       val _ = TextIO.output(fd, get_final())
+       val _ = TextIO.closeOut fd
+       (************************************)
+
 
 	in
 		print "yes!!\n"

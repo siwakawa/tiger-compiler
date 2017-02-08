@@ -92,7 +92,7 @@ fun transExp(venv, tenv) =
                 in 
                     {exp=ci_e, ty=r}
                 end
-              | _ => error("Function not defined" ^ f, nl))
+              | _ => error("Function not defined " ^ f, nl))
 		| trexp(OpExp({left, oper=EqOp, right}, nl)) =
 			let
 				val {exp=expl, ty=tyl} = trexp left
@@ -258,7 +258,7 @@ fun transExp(venv, tenv) =
 				{exp=seqExp(expdecs@[expbody]), ty=tybody}
 			end
 		| trexp(BreakExp nl) =
-			{exp=breakExp(), ty=TUnit} (*COMPLETAR.. falta algo mas?*)
+			{exp=breakExp(), ty=TUnit}
 		| trexp(ArrayExp({typ, size, init}, nl)) =
             let val {exp=expsize, ty=tysize} = trexp size
                 val {exp=expinit, ty=tyinit} = trexp init
