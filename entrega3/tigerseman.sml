@@ -239,7 +239,7 @@ fun transExp(venv, tenv) =
                 val venv'' = tabInserta (var, VIntro({access=acc', level=level}), venv')
                 val {exp=eb',ty=tb'} = transExp(venv'', tenv) body
                 val _ = if tiposIguales tb' TUnit then () else error("For expression cannot return a value", nl)
-                val ev' = simpleVar(acc', 0)
+                val ev' = simpleVar(acc', level)
                 val ef'= forExp({lo=explo, hi=exphi, var=ev', body=eb'})
                 val _ = postWhileForExp()
 			in {exp=ef', ty=TUnit} 
