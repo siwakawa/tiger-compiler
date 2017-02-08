@@ -8,6 +8,13 @@ struct
 
     val emptyStringSet = Splayset.empty(String.compare)
     val emptyIntSet = Splayset.empty(Int.compare)
+
+    fun temp_order(t1, t2) = let val t1_n = String.extract(t1, 1, NONE)
+                                 val t2_n = String.extract(t2, 1, NONE)
+                             in case (Int.fromString(t1_n), Int.fromString(t2_n)) of
+                                   (SOME n1, SOME n2) => Int.compare(n1, n2)
+                                  | _ => String.compare(t1, t2)
+                             end
     
     val K = List.length(tigerframe.usable_regs)
     val precolored = ref (Splayset.addList(Splayset.empty(String.compare), tigerframe.list_regs))
@@ -22,7 +29,6 @@ struct
 
     fun moveOrder((from1,to1),(from2,to2)) = if from1=from2 then String.compare(to1,to2) else String.compare(from1,from2)
     val moveList = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, (tigertemp.temp * tigertemp.temp) Splayset.set) Splaymap.dict ref
-(*    val getMoves = ref (fn(x) => Splayset.empty(moveOrder))*)
     val alias = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, tigertemp.temp) Splaymap.dict ref
     val color = ref (Splaymap.mkDict(String.compare)) : (tigertemp.temp, int) Splaymap.dict ref
     val _ = List.app (fn(n) => color := Splaymap.insert(!color, List.nth(tigerframe.usable_regs, n), n)) (List.tabulate(K, (fn(x) => x)))
@@ -55,7 +61,6 @@ struct
       val _ = selectStack := [](* : (ref (tigertemp.temp list))*)
 
       val _ = moveList := (Splaymap.mkDict(String.compare)) 
-(*      val _ = getMoves := (fn(x) => Splayset.empty(moveOrder))*)
       val _ = alias := (Splaymap.mkDict(String.compare))
       val _ = color := (Splaymap.mkDict(String.compare))
       val _ = List.app (fn(n) => color := Splaymap.insert(!color, List.nth(tigerframe.usable_regs, n), n)) (List.tabulate(K, (fn(x) => x)))
@@ -207,16 +212,16 @@ struct
                       then getAlias(Splaymap.find(!alias, n))
                       else n
 
-    fun addWorkList(u) = if (not (Splayset.member(!precolored, u)) andalso
-                                       not (moveRelated(u)) andalso 
-                                       Splaymap.find(!degree, u) < K
-                                      )
-                                   then (let
-                                       val singleton_u = Splayset.singleton String.compare u
-                                     in (freezeWorklist := Splayset.difference(!freezeWorklist, singleton_u);
-                                         simplifyWorklist := Splayset.union(!simplifyWorklist, singleton_u))
-                                     end)
-                                   else ()
+    fun addWorkList(u) = let
+      val _ = if (not (Splayset.member(!precolored, u)) andalso
+                  not (moveRelated(u)) andalso 
+                  Splaymap.find(!degree, u) < K)
+              then (let val singleton_u = Splayset.singleton String.compare u
+                    in (freezeWorklist := Splayset.difference(!freezeWorklist, singleton_u);
+                        simplifyWorklist := Splayset.union(!simplifyWorklist, singleton_u))
+                    end)
+              else ()
+      in () end
 
     fun ok(t, r) = let 
         val degree_t = case Splaymap.peek(!degree, t) of SOME(x) => x | NONE => 0
@@ -270,6 +275,7 @@ struct
                       else (if (Splayset.member(!precolored, u) andalso (List.all ok (List.map (fn(t) => (t,u)) (Splayset.listItems(adjacent(v))))))
                                orelse (not (Splayset.member(!precolored, u)) andalso conservative(Splayset.union(adjacent(u), adjacent(v))))
                             then (coalescedMoves := Splayset.union(!coalescedMoves, singleton_m); 
+(*                                    if v="T139" then print("hola, u="^u^", v="^v^"\n") else ();*)
 (*                                  if u="T8" orelse v="T8" then print(u^", "^v^"\n") else ();*)
                                   combine((u,v)) (*handle NotFound => print("combine\n") *);
 (*                                  if u="T8" orelse v="T8" then print(getAlias(u)^", "^getAlias(v)^"\n") else ();*)
@@ -307,19 +313,28 @@ struct
 
     fun selectSpill() = let
     (* heuristic: select the temporaries created earlier, i.e: t1 is better than t200 *)
-        val ordered_spills = Listsort.sort(String.compare) (Splayset.listItems(!spillWorklist))
+        val ordered_spills = Listsort.sort(temp_order) (Splayset.listItems(!spillWorklist))
         val m = hd(ordered_spills)
         val singleton_m = Splayset.singleton String.compare m
         val _ = spillWorklist := Splayset.difference(!spillWorklist, singleton_m)
         val _ = simplifyWorklist := Splayset.union(!simplifyWorklist, singleton_m)
+(*        val _ = (print("SpillWorkList: ");
+                Splayset.app (fn(t) => print(t^", ")) (!spillWorklist);
+                print("\n");
+                print("SimplifyWorklist: ");
+                Splayset.app (fn(t) => print(t^", ")) (!simplifyWorklist);
+                print("\n"))*)
       in freezeMoves(m)
       end
 
     fun assignColors() = let
         val _ = if (List.null(!selectStack))
-                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) handle NotFound => (print(n ^ ", alias: "^getAlias(n)^"\n");0)))) (!coalescedNodes)
+                then Splayset.app (fn(n) => (color := Splaymap.insert(!color, n, Splaymap.find(!color, getAlias(n)) handle NotFound => ~1))) (!coalescedNodes)
                 else (let
                     (* pop *)
+           (*         val _ = print("selectStack: ")
+                    val _ = List.app (fn(t) => print(t^", ")) (!selectStack)
+                    val _ = print("\n")*)
                     val n = hd(!selectStack)        
                     val _ = selectStack := List.tl(!selectStack)
                     val singleton_n = Splayset.singleton String.compare n
@@ -487,6 +502,7 @@ struct
 
          in if needsRewrite
             then (let val (frame', newIns, newInitial) = rewriteProgram(frame, instructions)
+        
                   in main'(newIns, frame', newInitial) (*handle NotFound => (print("rewriteProgram\n"); (frame, instructions,!initial))*)
                   end)
             else (instructions, !color)
