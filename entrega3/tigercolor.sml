@@ -476,9 +476,9 @@ struct
 
 
     (* This is the main called from other modules. It initializes initial. It takes as an argument instruction_list, which is the output of procEntryExit3*)
-    fun main(instruction_list, frame) = let
+    fun main(body, frame) = let
         val _ = reset_globals(emptyStringSet)
-        val {prolog=p,body=b,epilog=e} = instruction_list
+        val b = body
 
         val (flowgraph, nodeToIns) = tigerflowgraph.instrs2graph b
         val (intgraph, liveMap) = tigerliveness.interferenceGraph flowgraph
@@ -493,7 +493,7 @@ struct
         val assigned_ins = assign_registers(newIns)
         val simplified_ins = delete_redundant_moves(assigned_ins)
 
-     in (simplified_ins, final_color)
+     in (simplified_ins, final_color, frame)
      end
 end
 
