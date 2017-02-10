@@ -85,12 +85,8 @@ fun codegen frame stm =
                 end
 
 
-            (* general case for MOVE *)
-            | munchStm(MOVE(e1, e2)) = 
-                let val t = tigertemp.newtemp() 
-                in emit(tigerassem.MOVE{assem="movl `s0, `d0", dst=t, src=(munchExp e2)});
-                   emit(tigerassem.MOVE{assem="movl `s0, `d0", dst=(munchExp e1), src=t})
-                end
+            | munchStm(MOVE(e1, e2)) = raise Fail "Unhandled case of MOVE in code generation"
+
             | munchStm(EXP(CALL(NAME f, args))) = 
                (* We don't save the caller saves, we just put them in dst so the register allocator will know they can be overwritten inside the call *)
                (* (saveCallerSaves(); *)

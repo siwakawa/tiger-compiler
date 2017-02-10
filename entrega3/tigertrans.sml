@@ -189,10 +189,8 @@ fun arrayExp{size, init} =
 let
 	val s = unEx size
 	val i = unEx init
-    val ret = newtemp()
 in
-	Ex (ESEQ (seq [EXP (externalCall("_initArray", [s, i])),
-                  MOVE (TEMP ret, TEMP rv)], TEMP ret))
+	Ex (externalCall("_initArray", [s, i]))
       
         
 end

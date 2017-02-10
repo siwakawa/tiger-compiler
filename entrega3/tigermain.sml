@@ -111,9 +111,8 @@ fun main(args) =
 
 
        (* Coloring and register allocation*)
-       val assigned_ins = List.map tigercolor.main assem_trees (*handle NotFound => (print("tigercolor.main\n");[])*)
+       val assigned_ins = List.map tigercolor.main assem_trees
        val ins_with_prolog_epilog = List.map (fn(ins, _, f) => (tigerframe.procEntryExit3(f, ins))) assigned_ins
-(*       val prolog_epilog = List.map (fn(({prolog=p,body=b,epilog=e}, f)) => (p, e)) assem_trees*)
        val _ = if color then List.app (fn((_, map, _)) => Splaymap.app (fn(t,c)=> print(t ^ ": "^Int.toString(c) ^ "\n")) map) assigned_ins else ()
 
        fun get_final() = let
@@ -128,11 +127,7 @@ fun main(args) =
                        let val bodies_w_format = List.map asm_formatter b
                       in p^(List.foldr (fn(b,bs)=>b^bs) "" bodies_w_format )^e^s
                       end) ""  ins_with_prolog_epilog
-(*           val e =  (ListPair.foldr (fn((ins, coloring), (prolog,epilog), total) => 
-                             let val bodies_w_format = List.map asm_formatter ins 
-                             in prolog ^ (List.foldr (fn(b, bs) => b^bs)  "" bodies_w_format) ^ epilog ^"\n" ^ total
-                             end) "" (assigned_ins, prolog_epilog)) *)
-           
+          
            in a^b^c^d^e end
 
        val _ = if final then print (get_final()) else ()
